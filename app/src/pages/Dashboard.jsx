@@ -194,12 +194,12 @@ export default function Dashboard() {
               />
             </Field>
 
-            <Field label="Description">
+            <Field label="Description / Scope">
               <textarea
                 required
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
-                
+                placeholder="Enter the description or scope of work for this PO"
                 rows={3}
                 className="input resize-none"
               />
