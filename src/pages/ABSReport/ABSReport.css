@@ -1,0 +1,72 @@
+.abs-page {
+  padding: 2rem;
+  max-width: 80rem;
+  margin: 0 auto;
+}
+
+.abs-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.abs-refresh {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--color-line);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  flex-shrink: 0;
+  transition: border-color 0.15s ease;
+}
+
+.abs-refresh:hover {
+  border-color: var(--color-rivet);
+}
+
+.abs-refresh .spinning {
+  animation: abs-spin 0.8s linear infinite;
+}
+
+@keyframes abs-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.abs-table-wrap {
+  margin-top: 1.5rem;
+}
+
+.text-rivet {
+  color: var(--color-rivet);
+}
+.text-rivet2 {
+  color: var(--color-rivet2);
+}
+.text-warn {
+  color: var(--color-warn);
+}
+.text-ok {
+  color: var(--color-ok);
+}
+.text-muted {
+  color: var(--color-muted);
+}
+
+.abs-subtotal-row {
+  background: rgba(26, 35, 45, 0.6);
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+@media (max-width: 640px) {
+  .abs-page {
+    padding: 1.25rem;
+  }
+}

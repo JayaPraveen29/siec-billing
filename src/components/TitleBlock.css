@@ -1,0 +1,92 @@
+.title-block {
+  border: 1px solid var(--color-line);
+  background: var(--color-plate);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.title-block-top {
+  display: flex;
+  align-items: stretch;
+}
+
+.title-block-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+  border-right: 1px solid var(--color-line);
+  background: var(--color-plate2);
+  min-width: 64px;
+}
+
+.title-block-icon svg {
+  color: var(--color-rivet);
+}
+
+.title-block-main {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  min-width: 0;
+}
+
+.title-block-company {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  overflow-wrap: break-word;
+}
+
+.title-block-doctype {
+  font-size: 0.75rem;
+  color: var(--color-rivet);
+  font-family: var(--font-mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-top: 0.25rem;
+}
+
+.title-block-fields {
+  display: grid;
+  border-top: 1px solid var(--color-line);
+}
+
+.title-block-field {
+  padding: 0.5rem 1rem;
+  min-width: 0;
+}
+
+.title-block-field.bordered {
+  border-left: 1px solid var(--color-line);
+}
+
+.title-block-field-label {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--color-muted);
+  font-family: var(--font-display);
+}
+
+.title-block-field-value {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  color: var(--color-paper);
+  margin-top: 0.125rem;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: break-word;
+}
+
+/* On narrow screens stack the field grid instead of squeezing N columns */
+@media (max-width: 560px) {
+  .title-block-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .title-block-field.bordered:nth-child(odd) {
+    border-left: none;
+  }
+  .title-block-field:nth-child(n+3) {
+    border-top: 1px solid var(--color-line);
+  }
+}

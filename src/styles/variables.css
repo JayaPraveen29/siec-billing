@@ -1,0 +1,30 @@
+/* ==========================================================================
+   Design tokens — mirrors the old tailwind.config.js theme.
+   Everything else in the app is built from these variables.
+   ========================================================================== */
+:root {
+  /* colors */
+  --color-ink: #10161d;
+  --color-plate: #1a232d;
+  --color-plate2: #212c38;
+  --color-blueprint: #2c3e50;
+  --color-line: #324454;
+  --color-rivet: #d68a3c;
+  --color-rivet2: #f0a94e;
+  --color-paper: #eef1f4;
+  --color-muted: #8fa1b0;
+  --color-ok: #4f9d69;
+  --color-warn: #c2542f;
+
+  /* fonts */
+  --font-display: 'Sora', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* layout */
+  --sidebar-width: 256px;
+  --radius-sm: 2px;
+
+  /* responsive breakpoints (for reference in comments):
+     sm: 640px   md: 768px   lg: 1024px   xl: 1280px */
+}

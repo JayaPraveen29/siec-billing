@@ -12,13 +12,14 @@ import {
   updateInvoice,
   updateItem,
   updatePOSheet,
-} from "../services/poService";
-import { computePOLedger } from "../utils/ledger";
-import { fmtINR, fmtNum, fmtDate, toInputDate } from "../utils/format";
-import TitleBlock from "../components/TitleBlock";
-import Loading from "../components/Loading";
-import ConfirmDialog from "../components/ConfirmDialog";
-import StatCard from "../components/StatCard";
+} from "../../services/poService";
+import { computePOLedger } from "../../utils/ledger";
+import { fmtINR, fmtNum, fmtDate, toInputDate } from "../../utils/format";
+import TitleBlock from "../../components/TitleBlock";
+import Loading from "../../components/Loading";
+import ConfirmDialog from "../../components/ConfirmDialog";
+import StatCard from "../../components/StatCard";
+import "./POSheet.css";
 
 const emptyItem = { srNo: "", description: "", weightKg: "" };
 
@@ -33,7 +34,6 @@ export default function POSheet() {
   const [itemModal, setItemModal] = useState(null); // {mode:'new'|'edit', data}
   const [invoiceModal, setInvoiceModal] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null); // {type, id}
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     const unsub = subscribePOSheets((all) => {
@@ -53,7 +53,7 @@ export default function POSheet() {
 
   if (po === null || items === null || invoices === null) {
     return (
-      <div className="p-8">
+      <div className="po-page">
         <Loading label="Loading PO sheet" />
       </div>
     );
@@ -85,11 +85,8 @@ export default function POSheet() {
   }
 
   return (
-    <div className="p-4 sm:p-8 max-w-7xl mx-auto">
-      <button
-        onClick={() => navigate("/")}
-        className="flex items-center gap-2 text-muted hover:text-paper text-sm mb-4 transition"
-      >
+    <div className="po-page">
+      <button onClick={() => navigate("/")} className="back-link">
         <ArrowLeft size={15} /> Back to register
       </button>
 
@@ -102,22 +99,16 @@ export default function POSheet() {
           { label: "GST", value: `${po.gstPercent}%` },
         ]}
       />
-      {po.title && <p className="text-muted text-sm mt-3">{po.title}</p>}
+      {po.title && <p className="po-title-desc">{po.title}</p>}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mt-6">
-        <StatCard
-          label="Total Weight"
-          value={`${fmtNum(ledger.totals.weightKg, 1)} kg`}
-        />
+      <div className="po-stat-grid">
+        <StatCard label="Total Weight" value={`${fmtNum(ledger.totals.weightKg, 1)} kg`} />
         <StatCard
           label="Balance Weight"
           value={`${fmtNum(ledger.totals.balanceQty, 1)} kg`}
           accent={ledger.totals.balanceQty > 0 ? "warn" : "ok"}
         />
-        <StatCard
-          label="Net Receivable"
-          value={fmtINR(ledger.totals.netReceivable)}
-        />
+        <StatCard label="Net Receivable" value={fmtINR(ledger.totals.netReceivable)} />
         <StatCard
           label="Balance to Receive"
           value={fmtINR(ledger.totals.balanceToReceive)}
@@ -126,19 +117,19 @@ export default function POSheet() {
       </div>
 
       {/* ITEMS */}
-      <section className="mt-8 sm:mt-10">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <h2 className="font-display text-2xl tracking-wide">Items</h2>
+      <section className="po-section">
+        <div className="po-section-header">
+          <h2 className="section-title">Items</h2>
           <button
             onClick={() => setItemModal({ mode: "new", data: emptyItem })}
-            className="flex items-center gap-2 bg-plate2 border border-line hover:border-rivet px-3 py-1.5 rounded-sm text-sm transition"
+            className="btn-outline"
           >
             <Plus size={15} /> Add Item
           </button>
         </div>
-        <div className="overflow-x-auto border border-line rounded-sm">
-          <table className="w-full ledger-table text-sm">
-            <thead className="bg-plate2">
+        <div className="table-scroll">
+          <table className="ledger-table">
+            <thead>
               <tr>
                 <th>No.</th>
                 <th>Description</th>
@@ -150,33 +141,25 @@ export default function POSheet() {
             </thead>
             <tbody>
               {ledger.itemRows.map((it) => (
-                <tr key={it.id} className="hover:bg-plate2/60 group">
-                  <td className="font-mono">{it.srNo}</td>
+                <tr key={it.id}>
+                  <td>{it.srNo}</td>
                   <td>{it.description}</td>
-                  <td className="text-right font-mono tabular">
-                    {fmtNum(it.weightKg, 2)}
-                  </td>
-                  <td className="text-right font-mono tabular text-muted">
-                    {fmtNum(it.allocated, 2)}
-                  </td>
-                  <td
-                    className={`text-right font-mono tabular ${
-                      it.balanceQty > 0.001 ? "text-warn" : "text-ok"
-                    }`}
-                  >
+                  <td className="text-right tabular">{fmtNum(it.weightKg, 2)}</td>
+                  <td className="text-right tabular text-muted">{fmtNum(it.allocated, 2)}</td>
+                  <td className={`text-right tabular ${it.balanceQty > 0.001 ? "text-warn" : "text-ok"}`}>
                     {fmtNum(it.balanceQty, 2)}
                   </td>
                   <td>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition justify-end">
+                    <div className="row-actions">
                       <button
                         onClick={() => setItemModal({ mode: "edit", data: it })}
-                        className="text-muted hover:text-rivet"
+                        className="edit-btn"
                       >
                         <Pencil size={14} />
                       </button>
                       <button
                         onClick={() => setDeleteTarget({ type: "item", id: it.id })}
-                        className="text-muted hover:text-warn"
+                        className="delete-btn"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -186,7 +169,7 @@ export default function POSheet() {
               ))}
               {ledger.itemRows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center text-muted py-6">
+                  <td colSpan={6} className="text-center text-muted" style={{ padding: "1.5rem 0" }}>
                     No items yet.
                   </td>
                 </tr>
@@ -194,17 +177,11 @@ export default function POSheet() {
             </tbody>
             {ledger.itemRows.length > 0 && (
               <tfoot>
-                <tr className="bg-plate2 font-semibold">
+                <tr>
                   <td colSpan={2}>Total</td>
-                  <td className="text-right font-mono tabular">
-                    {fmtNum(ledger.totals.weightKg, 2)}
-                  </td>
-                  <td className="text-right font-mono tabular">
-                    {fmtNum(ledger.totals.qty, 2)}
-                  </td>
-                  <td className="text-right font-mono tabular">
-                    {fmtNum(ledger.totals.balanceQty, 2)}
-                  </td>
+                  <td className="text-right tabular">{fmtNum(ledger.totals.weightKg, 2)}</td>
+                  <td className="text-right tabular">{fmtNum(ledger.totals.qty, 2)}</td>
+                  <td className="text-right tabular">{fmtNum(ledger.totals.balanceQty, 2)}</td>
                   <td></td>
                 </tr>
               </tfoot>
@@ -214,21 +191,21 @@ export default function POSheet() {
       </section>
 
       {/* INVOICES */}
-      <section className="mt-8 sm:mt-10">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <h2 className="font-display text-2xl tracking-wide">Invoice</h2>
+      <section className="po-section">
+        <div className="po-section-header">
+          <h2 className="section-title">Invoice</h2>
           <button
             onClick={() => setInvoiceModal({ mode: "new", data: null })}
             disabled={ledger.itemRows.length === 0}
-            className="flex items-center gap-2 bg-rivet text-ink px-3 py-1.5 rounded-sm text-sm font-display uppercase tracking-wide hover:brightness-110 transition disabled:opacity-40"
+            className="btn-primary"
           >
             <Plus size={15} /> Add Invoice
           </button>
         </div>
 
-        <div className="overflow-x-auto border border-line rounded-sm">
-          <table className="w-full ledger-table text-sm">
-            <thead className="bg-plate2">
+        <div className="table-scroll">
+          <table className="ledger-table">
+            <thead>
               <tr>
                 <th>Inv. No.</th>
                 <th>Date</th>
@@ -250,51 +227,39 @@ export default function POSheet() {
             </thead>
             <tbody>
               {ledger.invoiceRows.map((inv) => (
-                <tr key={inv.id} className="hover:bg-plate2/60 group">
-                  <td className="font-mono">{inv.invoiceNo}</td>
-                  <td className="font-mono">{fmtDate(inv.invoiceDate)}</td>
-                  <td className="text-right font-mono tabular">{fmtNum(inv.qty, 2)}</td>
-                  <td className="text-right font-mono tabular">{fmtNum(inv.basic, 0)}</td>
-                  <td className="text-right font-mono tabular">{fmtNum(inv.gst, 0)}</td>
-                  <td className="text-right font-mono tabular">{fmtNum(inv.roundOff, 0)}</td>
-                  <td className="text-right font-mono tabular font-semibold">
+                <tr key={inv.id}>
+                  <td>{inv.invoiceNo}</td>
+                  <td>{fmtDate(inv.invoiceDate)}</td>
+                  <td className="text-right tabular">{fmtNum(inv.qty, 2)}</td>
+                  <td className="text-right tabular">{fmtNum(inv.basic, 0)}</td>
+                  <td className="text-right tabular">{fmtNum(inv.gst, 0)}</td>
+                  <td className="text-right tabular">{fmtNum(inv.roundOff, 0)}</td>
+                  <td className="text-right tabular" style={{ fontWeight: 600 }}>
                     {fmtNum(inv.totalInvoiceValue, 0)}
                   </td>
-                  <td className="text-right font-mono tabular">{fmtNum(inv.matAdvance, 0)}</td>
-                  <td className="text-right font-mono tabular">{fmtNum(inv.tds, 0)}</td>
-                  <td className="text-right font-mono tabular font-semibold text-rivet2">
+                  <td className="text-right tabular">{fmtNum(inv.matAdvance, 0)}</td>
+                  <td className="text-right tabular">{fmtNum(inv.tds, 0)}</td>
+                  <td className="text-right tabular text-rivet2" style={{ fontWeight: 600 }}>
                     {fmtNum(inv.netReceivable, 0)}
                   </td>
-                  <td className="text-right font-mono tabular text-muted">
-                    {fmtNum(inv.matAdvanceBalance, 0)}
-                  </td>
-                  <td className="text-right font-mono tabular">
-                    {fmtNum(inv.paymentReceived, 0)}
-                  </td>
-                  <td className="font-mono">{fmtDate(inv.paymentDate)}</td>
-                  <td
-                    className={`text-right font-mono tabular ${
-                      inv.balanceToReceive > 0.5 ? "text-warn" : "text-ok"
-                    }`}
-                  >
+                  <td className="text-right tabular text-muted">{fmtNum(inv.matAdvanceBalance, 0)}</td>
+                  <td className="text-right tabular">{fmtNum(inv.paymentReceived, 0)}</td>
+                  <td>{fmtDate(inv.paymentDate)}</td>
+                  <td className={`text-right tabular ${inv.balanceToReceive > 0.5 ? "text-warn" : "text-ok"}`}>
                     {fmtNum(inv.balanceToReceive, 0)}
                   </td>
-                  <td className="text-right font-mono tabular text-muted">
-                    {inv.days ?? "-"}
-                  </td>
+                  <td className="text-right tabular text-muted">{inv.days ?? "-"}</td>
                   <td>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition justify-end">
+                    <div className="row-actions">
                       <button
                         onClick={() => setInvoiceModal({ mode: "edit", data: inv })}
-                        className="text-muted hover:text-rivet"
+                        className="edit-btn"
                       >
                         <Pencil size={14} />
                       </button>
                       <button
-                        onClick={() =>
-                          setDeleteTarget({ type: "invoice", id: inv.id })
-                        }
-                        className="text-muted hover:text-warn"
+                        onClick={() => setDeleteTarget({ type: "invoice", id: inv.id })}
+                        className="delete-btn"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -304,7 +269,7 @@ export default function POSheet() {
               ))}
               {ledger.invoiceRows.length === 0 && (
                 <tr>
-                  <td colSpan={16} className="text-center text-muted py-6">
+                  <td colSpan={16} className="text-center text-muted" style={{ padding: "1.5rem 0" }}>
                     No invoices raised yet.
                   </td>
                 </tr>
@@ -312,28 +277,20 @@ export default function POSheet() {
             </tbody>
             {ledger.invoiceRows.length > 0 && (
               <tfoot>
-                <tr className="bg-plate2 font-semibold">
+                <tr>
                   <td colSpan={2}>Total</td>
-                  <td className="text-right font-mono tabular">{fmtNum(ledger.totals.qty, 2)}</td>
-                  <td className="text-right font-mono tabular">{fmtNum(ledger.totals.basic, 0)}</td>
-                  <td className="text-right font-mono tabular">{fmtNum(ledger.totals.gst, 0)}</td>
-                  <td className="text-right font-mono tabular">{fmtNum(ledger.totals.roundOff, 0)}</td>
-                  <td className="text-right font-mono tabular">
-                    {fmtNum(ledger.totals.totalInvoiceValue, 0)}
-                  </td>
-                  <td className="text-right font-mono tabular">{fmtNum(ledger.totals.matAdvance, 0)}</td>
-                  <td className="text-right font-mono tabular">{fmtNum(ledger.totals.tds, 0)}</td>
-                  <td className="text-right font-mono tabular text-rivet2">
-                    {fmtNum(ledger.totals.netReceivable, 0)}
-                  </td>
-                  <td className="text-right font-mono tabular">{fmtNum(ledger.matAdvanceBalance, 0)}</td>
-                  <td className="text-right font-mono tabular">
-                    {fmtNum(ledger.totals.paymentReceived, 0)}
-                  </td>
+                  <td className="text-right tabular">{fmtNum(ledger.totals.qty, 2)}</td>
+                  <td className="text-right tabular">{fmtNum(ledger.totals.basic, 0)}</td>
+                  <td className="text-right tabular">{fmtNum(ledger.totals.gst, 0)}</td>
+                  <td className="text-right tabular">{fmtNum(ledger.totals.roundOff, 0)}</td>
+                  <td className="text-right tabular">{fmtNum(ledger.totals.totalInvoiceValue, 0)}</td>
+                  <td className="text-right tabular">{fmtNum(ledger.totals.matAdvance, 0)}</td>
+                  <td className="text-right tabular">{fmtNum(ledger.totals.tds, 0)}</td>
+                  <td className="text-right tabular text-rivet2">{fmtNum(ledger.totals.netReceivable, 0)}</td>
+                  <td className="text-right tabular">{fmtNum(ledger.matAdvanceBalance, 0)}</td>
+                  <td className="text-right tabular">{fmtNum(ledger.totals.paymentReceived, 0)}</td>
                   <td></td>
-                  <td className="text-right font-mono tabular">
-                    {fmtNum(ledger.totals.balanceToReceive, 0)}
-                  </td>
+                  <td className="text-right tabular">{fmtNum(ledger.totals.balanceToReceive, 0)}</td>
                   <td colSpan={2}></td>
                 </tr>
               </tfoot>
@@ -380,7 +337,7 @@ function ItemModal({ mode, data, onCancel, onSave }) {
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div className="modal-overlay">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -390,15 +347,12 @@ function ItemModal({ mode, data, onCancel, onSave }) {
             weightKg: Number(form.weightKg) || 0,
           });
         }}
-        className="bg-plate border border-line rounded-sm w-full max-w-md p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+        className="modal-panel"
+        style={{ maxWidth: "28rem" }}
       >
-        <h3 className="font-display text-2xl tracking-wide">
-          {mode === "new" ? "Item" : "Edit Item"}
-        </h3>
-        <label className="block">
-          <span className="text-[11px] uppercase tracking-widest text-muted font-display">
-            No.
-          </span>
+        <h3 className="modal-title">{mode === "new" ? "Item" : "Edit Item"}</h3>
+        <label style={{ display: "block" }}>
+          <span className="field-label">No.</span>
           <input
             required
             type="text"
@@ -407,45 +361,37 @@ function ItemModal({ mode, data, onCancel, onSave }) {
             value={form.srNo}
             onChange={(e) => setForm({ ...form, srNo: e.target.value })}
             placeholder="e.g. 1"
-            className="input mt-1"
+            className="input"
+            style={{ marginTop: "0.25rem" }}
           />
         </label>
-        <label className="block">
-          <span className="text-[11px] uppercase tracking-widest text-muted font-display">
-            Description
-          </span>
+        <label style={{ display: "block" }}>
+          <span className="field-label">Description</span>
           <input
             required
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
-            className="input mt-1"
+            className="input"
+            style={{ marginTop: "0.25rem" }}
           />
         </label>
-        <label className="block">
-          <span className="text-[11px] uppercase tracking-widest text-muted font-display">
-            Weight (kg)
-          </span>
+        <label style={{ display: "block" }}>
+          <span className="field-label">Weight (kg)</span>
           <input
             required
             type="number"
             step="0.01"
             value={form.weightKg}
             onChange={(e) => setForm({ ...form, weightKg: e.target.value })}
-            className="input mt-1"
+            className="input"
+            style={{ marginTop: "0.25rem" }}
           />
         </label>
-        <div className="flex justify-end gap-3 pt-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-2 text-sm rounded-sm border border-line text-muted hover:text-paper transition"
-          >
+        <div className="modal-actions">
+          <button type="button" onClick={onCancel} className="btn-secondary">
             Cancel
           </button>
-          <button
-            type="submit"
-            className="px-4 py-2 text-sm rounded-sm bg-rivet text-ink font-display uppercase tracking-wide hover:brightness-110 transition"
-          >
+          <button type="submit" className="btn-primary">
             Save
           </button>
         </div>
@@ -494,57 +440,45 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <form
-        onSubmit={submit}
-        className="bg-plate border border-line rounded-sm w-full max-w-2xl p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto"
-      >
-        <h3 className="font-display text-2xl tracking-wide">
-          {mode === "new" ? "Add Invoice" : "Edit Invoice"}
-        </h3>
+    <div className="modal-overlay">
+      <form onSubmit={submit} className="modal-panel invoice-modal">
+        <h3 className="modal-title">{mode === "new" ? "Add Invoice" : "Edit Invoice"}</h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="block">
-            <span className="text-[11px] uppercase tracking-widest text-muted font-display">
-              Invoice No.
-            </span>
+        <div className="form-row-2">
+          <label style={{ display: "block" }}>
+            <span className="field-label">Invoice No.</span>
             <input
               required
               value={invoiceNo}
               onChange={(e) => setInvoiceNo(e.target.value)}
-              className="input mt-1"
+              className="input"
+              style={{ marginTop: "0.25rem" }}
             />
           </label>
-          <label className="block">
-            <span className="text-[11px] uppercase tracking-widest text-muted font-display">
-              Invoice Date
-            </span>
+          <label style={{ display: "block" }}>
+            <span className="field-label">Invoice Date</span>
             <input
               required
               type="date"
               value={invoiceDate}
               onChange={(e) => setInvoiceDate(e.target.value)}
-              className="input mt-1"
+              className="input"
+              style={{ marginTop: "0.25rem" }}
             />
           </label>
         </div>
 
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-muted font-display mb-2">
+          <div className="field-label" style={{ marginBottom: "0.5rem" }}>
             Quantity Billed per Item (kg)
           </div>
-          <div className="border border-line rounded-sm divide-y divide-line max-h-48 overflow-y-auto">
+          <div className="item-list">
             {items.map((it) => (
-              <div
-                key={it.id}
-                className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
-              >
-                <div className="text-sm min-w-0">
-                  <span className="font-mono text-muted mr-2">{it.srNo}</span>
+              <div key={it.id} className="item-list-row">
+                <div className="item-list-desc">
+                  <span className="item-list-sr">{it.srNo}</span>
                   {it.description}
-                  <span className="text-xs text-muted ml-2">
-                    (bal. {fmtNum(it.balanceQty, 2)} kg)
-                  </span>
+                  <span className="item-list-bal">(bal. {fmtNum(it.balanceQty, 2)} kg)</span>
                 </div>
                 <input
                   type="number"
@@ -553,7 +487,7 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
                   onChange={(e) =>
                     setAllocations({ ...allocations, [it.id]: e.target.value })
                   }
-                  className="w-24 sm:w-28 bg-ink border border-line rounded-sm px-2 py-1 text-sm text-right font-mono focus:border-rivet outline-none shrink-0"
+                  className="item-list-input"
                   placeholder="0"
                 />
               </div>
@@ -561,27 +495,25 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="block">
-            <span className="text-[11px] uppercase tracking-widest text-muted font-display">
-              Payment Received (₹)
-            </span>
+        <div className="form-row-2">
+          <label style={{ display: "block" }}>
+            <span className="field-label">Payment Received (₹)</span>
             <input
               type="number"
               value={paymentReceived}
               onChange={(e) => setPaymentReceived(e.target.value)}
-              className="input mt-1"
+              className="input"
+              style={{ marginTop: "0.25rem" }}
             />
           </label>
-          <label className="block">
-            <span className="text-[11px] uppercase tracking-widest text-muted font-display">
-              Payment Date
-            </span>
+          <label style={{ display: "block" }}>
+            <span className="field-label">Payment Date</span>
             <input
               type="date"
               value={paymentDate}
               onChange={(e) => setPaymentDate(e.target.value)}
-              className="input mt-1"
+              className="input"
+              style={{ marginTop: "0.25rem" }}
             />
           </label>
         </div>
@@ -589,68 +521,55 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
         <button
           type="button"
           onClick={() => setShowAdvanced((v) => !v)}
-          className="flex items-center gap-1 text-xs text-muted hover:text-paper transition"
+          className={`advanced-toggle${showAdvanced ? " open" : ""}`}
         >
-          <ChevronDown
-            size={14}
-            className={`transition-transform ${showAdvanced ? "rotate-180" : ""}`}
-          />
+          <ChevronDown size={14} />
           Manual overrides (Mat. Advance / TDS / Round Off)
         </button>
 
         {showAdvanced && (
-          <div className="grid grid-cols-3 gap-3">
-            <label className="block">
-              <span className="text-[11px] uppercase tracking-widest text-muted font-display">
-                Mat. Advance (₹)
-              </span>
+          <div className="form-row-3">
+            <label style={{ display: "block" }}>
+              <span className="field-label">Mat. Advance (₹)</span>
               <input
                 type="number"
                 value={matAdvanceOverride}
                 onChange={(e) => setMatAdvanceOverride(e.target.value)}
                 placeholder="auto"
-                className="input mt-1"
+                className="input"
+                style={{ marginTop: "0.25rem" }}
               />
             </label>
-            <label className="block">
-              <span className="text-[11px] uppercase tracking-widest text-muted font-display">
-                TDS (₹)
-              </span>
+            <label style={{ display: "block" }}>
+              <span className="field-label">TDS (₹)</span>
               <input
                 type="number"
                 value={tdsOverride}
                 onChange={(e) => setTdsOverride(e.target.value)}
                 placeholder="auto"
-                className="input mt-1"
+                className="input"
+                style={{ marginTop: "0.25rem" }}
               />
             </label>
-            <label className="block">
-              <span className="text-[11px] uppercase tracking-widest text-muted font-display">
-                Round Off (₹)
-              </span>
+            <label style={{ display: "block" }}>
+              <span className="field-label">Round Off (₹)</span>
               <input
                 type="number"
                 value={roundOffOverride}
                 onChange={(e) => setRoundOffOverride(e.target.value)}
                 placeholder="auto"
-                className="input mt-1"
+                className="input"
+                style={{ marginTop: "0.25rem" }}
               />
             </label>
           </div>
         )}
 
-        <div className="flex justify-end gap-3 pt-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-2 text-sm rounded-sm border border-line text-muted hover:text-paper transition"
-          >
+        <div className="modal-actions">
+          <button type="button" onClick={onCancel} className="btn-secondary">
             Cancel
           </button>
-          <button
-            type="submit"
-            className="px-4 py-2 text-sm rounded-sm bg-rivet text-ink font-display uppercase tracking-wide hover:brightness-110 transition"
-          >
+          <button type="submit" className="btn-primary">
             Save Invoice
           </button>
         </div>

@@ -6,17 +6,17 @@ import {
   deletePOSheet,
   fetchAllPOData,
   subscribePOSheets,
-} from "../services/poService";
-import { computePOLedger } from "../utils/ledger";
-import { fmtINR, fmtNum } from "../utils/format";
-import StatCard from "../components/StatCard";
-import Loading from "../components/Loading";
-import ConfirmDialog from "../components/ConfirmDialog";
-import TitleBlock from "../components/TitleBlock";
+} from "../../services/poService";
+import { computePOLedger } from "../../utils/ledger";
+import { fmtINR, fmtNum } from "../../utils/format";
+import StatCard from "../../components/StatCard";
+import Loading from "../../components/Loading";
+import ConfirmDialog from "../../components/ConfirmDialog";
+import TitleBlock from "../../components/TitleBlock";
+import "./Dashboard.css";
 
 const emptyForm = {
   poNumber: "",
-  title: "",
   unitRate: "",
   gstPercent: "18",
   tdsPercent: "0.1",
@@ -67,7 +67,6 @@ export default function Dashboard() {
       await createPOSheet({
         code: form.poNumber.trim(),
         poNumber: form.poNumber.trim(),
-        title: form.title.trim(),
         unitRate: Number(form.unitRate) || 0,
         gstPercent: Number(form.gstPercent) || 0,
         tdsPercent: Number(form.tdsPercent) || 0,
@@ -90,7 +89,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
+    <div className="page">
       <TitleBlock
         docType="Purchase Order Register"
         fields={[
@@ -99,7 +98,7 @@ export default function Dashboard() {
         ]}
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+      <div className="stat-grid">
         <StatCard
           label="Net Receivable"
           value={summary ? fmtINR(summary.netReceivable) : "…"}
@@ -121,12 +120,9 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="flex items-center justify-between mt-10 mb-4">
-        <h2 className="font-display text-2xl tracking-wide">PO Sheets</h2>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 bg-rivet text-ink px-4 py-2 rounded-sm text-sm font-display uppercase tracking-wide hover:brightness-110 transition"
-        >
+      <div className="section-header">
+        <h2 className="section-title">PO Sheets</h2>
+        <button onClick={() => setShowForm(true)} className="btn-primary">
           <Plus size={16} /> New PO Sheet
         </button>
       </div>
@@ -134,39 +130,29 @@ export default function Dashboard() {
       {poSheets === null && <Loading label="Loading PO sheets" />}
 
       {poSheets && poSheets.length === 0 && (
-        <div className="border border-dashed border-line rounded-sm py-14 text-center text-muted">
+        <div className="empty-state">
           No PO sheets yet. Create one to start entering invoices.
         </div>
       )}
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="po-grid">
         {poSheets?.map((po) => (
-          <div
-            key={po.id}
-            className="group bg-plate border border-line rounded-sm p-5 hover:border-rivet transition relative"
-          >
+          <div key={po.id} className="po-card">
             <button
               onClick={() => setToDelete(po.id)}
-              className="absolute top-3 right-3 text-muted hover:text-warn opacity-0 group-hover:opacity-100 transition"
+              className="po-card-delete"
               title="Delete PO sheet"
             >
               <Trash2 size={16} />
             </button>
-            <Link to={`/po/${po.id}`} className="block">
-              <div className="text-[11px] uppercase tracking-widest text-rivet font-mono">
-                {po.poNumber}
-              </div>
-              <div className="font-display text-2xl mt-1 flex items-center gap-2">
+            <Link to={`/po/${po.id}`} className="po-card-link">
+              <div className="po-card-po-number">{po.poNumber}</div>
+              <div className="po-card-code">
                 {po.code}
-                <ArrowUpRight
-                  size={18}
-                  className="text-muted group-hover:text-rivet transition"
-                />
+                <ArrowUpRight size={18} className="po-card-code-arrow" />
               </div>
-              <div className="text-sm text-muted mt-1 line-clamp-2">
-                {po.title || "No description"}
-              </div>
-              <div className="flex gap-4 mt-4 text-xs font-mono text-muted">
+              {po.title && <div className="po-card-desc">{po.title}</div>}
+              <div className="po-card-meta">
                 <span>Rate ₹{fmtNum(po.unitRate, 2)}/kg</span>
                 <span>GST {po.gstPercent}%</span>
                 <span>Mat. Adv. {po.matAdvPercent}%</span>
@@ -177,12 +163,9 @@ export default function Dashboard() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <form
-            onSubmit={handleCreate}
-            className="bg-plate border border-line rounded-sm w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto"
-          >
-            <h3 className="font-display text-2xl tracking-wide">New PO Sheet</h3>
+        <div className="modal-overlay">
+          <form onSubmit={handleCreate} className="modal-panel dashboard-form">
+            <h3 className="modal-title">New PO Sheet</h3>
 
             <Field label="PO Number">
               <input
@@ -194,18 +177,7 @@ export default function Dashboard() {
               />
             </Field>
 
-            <Field label="Description / Scope">
-              <textarea
-                required
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                placeholder="Enter the description or scope of work for this PO"
-                rows={3}
-                className="input resize-none"
-              />
-            </Field>
-
-            <div className="grid grid-cols-2 gap-3">
+            <div className="form-row-2">
               <Field label="Unit Rate (₹/kg)">
                 <input
                   required
@@ -228,7 +200,7 @@ export default function Dashboard() {
               </Field>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="form-row-3">
               <Field label="GST %">
                 <input
                   type="number"
@@ -260,19 +232,15 @@ export default function Dashboard() {
               </Field>
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="modal-actions">
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="px-4 py-2 text-sm rounded-sm border border-line text-muted hover:text-paper transition"
+                className="btn-secondary"
               >
                 Cancel
               </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 text-sm rounded-sm bg-rivet text-ink font-display uppercase tracking-wide hover:brightness-110 transition disabled:opacity-50"
-              >
+              <button type="submit" disabled={saving} className="btn-primary">
                 {saving ? "Creating…" : "Create Sheet"}
               </button>
             </div>
@@ -293,11 +261,9 @@ export default function Dashboard() {
 
 function Field({ label, children }) {
   return (
-    <label className="block">
-      <span className="text-[11px] uppercase tracking-widest text-muted font-display">
-        {label}
-      </span>
-      <div className="mt-1">{children}</div>
+    <label style={{ display: "block" }}>
+      <span className="field-label">{label}</span>
+      <div style={{ marginTop: "0.25rem" }}>{children}</div>
     </label>
   );
 }
