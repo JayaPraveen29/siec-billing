@@ -9,6 +9,7 @@ import {
   query,
   serverTimestamp,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../firebase";
 
@@ -43,6 +44,17 @@ export function subscribeItems(poId, cb) {
 
 export async function addItem(poId, data) {
   return addDoc(collection(db, "poSheets", poId, "items"), data);
+}
+
+// Adds many item rows in a single atomic batch — used by the "Bulk Add" paste flow.
+export async function addItemsBulk(poId, itemsArray) {
+  const batch = writeBatch(db);
+  const itemsCol = collection(db, "poSheets", poId, "items");
+  itemsArray.forEach((data) => {
+    const ref = doc(itemsCol);
+    batch.set(ref, data);
+  });
+  return batch.commit();
 }
 
 export async function updateItem(poId, itemId, data) {

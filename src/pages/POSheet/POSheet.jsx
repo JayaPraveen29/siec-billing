@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Plus, Pencil, Trash2, ChevronDown } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, ChevronDown, ClipboardPaste } from "lucide-react";
 import {
   addInvoice,
   addItem,
+  addItemsBulk,
   deleteInvoice,
   deleteItem,
   subscribeInvoices,
@@ -32,6 +33,7 @@ export default function POSheet() {
   const [invoices, setInvoices] = useState(null);
 
   const [itemModal, setItemModal] = useState(null); // {mode:'new'|'edit', data}
+  const [bulkModal, setBulkModal] = useState(false);
   const [invoiceModal, setInvoiceModal] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null); // {type, id}
 
@@ -66,6 +68,11 @@ export default function POSheet() {
       await updateItem(id, itemModal.data.id, data);
     }
     setItemModal(null);
+  }
+
+  async function handleBulkAddItems(rows) {
+    await addItemsBulk(id, rows);
+    setBulkModal(false);
   }
 
   async function handleSaveInvoice(data) {
@@ -120,12 +127,17 @@ export default function POSheet() {
       <section className="po-section">
         <div className="po-section-header">
           <h2 className="section-title">Items</h2>
-          <button
-            onClick={() => setItemModal({ mode: "new", data: emptyItem })}
-            className="btn-outline"
-          >
-            <Plus size={15} /> Add Item
-          </button>
+          <div className="header-btn-group">
+            <button onClick={() => setBulkModal(true)} className="btn-outline">
+              <ClipboardPaste size={15} /> Bulk Add
+            </button>
+            <button
+              onClick={() => setItemModal({ mode: "new", data: emptyItem })}
+              className="btn-outline"
+            >
+              <Plus size={15} /> Add Item
+            </button>
+          </div>
         </div>
         <div className="table-scroll">
           <table className="ledger-table">
@@ -299,6 +311,14 @@ export default function POSheet() {
         </div>
       </section>
 
+      {bulkModal && (
+        <BulkAddItemsModal
+          existingCount={items.length}
+          onCancel={() => setBulkModal(false)}
+          onSave={handleBulkAddItems}
+        />
+      )}
+
       {itemModal && (
         <ItemModal
           mode={itemModal.mode}
@@ -393,6 +413,134 @@ function ItemModal({ mode, data, onCancel, onSave }) {
           </button>
           <button type="submit" className="btn-primary">
             Save
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function parseBulkItemsText(text, startingSrNo) {
+  const lines = text
+    .split("\n")
+    .map((l) => l.replace(/\r/g, "").trim())
+    .filter((l) => l.length > 0);
+
+  const rows = lines
+    .map((line) => {
+      // Excel/Sheets paste uses tabs between columns; fall back to 2+ spaces or a comma.
+      let cols = line.split("\t");
+      if (cols.length < 2) cols = line.split(/ {2,}/);
+      if (cols.length < 2) cols = line.split(",");
+      return cols.map((c) => c.trim()).filter((c, i, arr) => !(arr.length === 1 && c === ""));
+    })
+    .filter((cols) => cols.length >= 2);
+
+  // Drop an obvious header row, e.g. "No. Description Wt./Kg"
+  const looksLikeHeader = (cols) =>
+    cols.some((c) => /^(no\.?|sr\.?\s*no\.?)$/i.test(c)) ||
+    cols.some((c) => /description/i.test(c));
+  const dataRows = rows.length && looksLikeHeader(rows[0]) ? rows.slice(1) : rows;
+
+  return dataRows.map((cols, idx) => {
+    // 3 columns => No, Description, Weight. 2 columns => Description, Weight (auto-number).
+    let srNo, description, weightRaw;
+    if (cols.length >= 3) {
+      [srNo, description, weightRaw] = cols;
+    } else {
+      description = cols[0];
+      weightRaw = cols[1];
+      srNo = String(startingSrNo + idx);
+    }
+    const weightKg = Number(String(weightRaw).replace(/[^0-9.-]/g, ""));
+    const valid = description.length > 0 && Number.isFinite(weightKg) && weightKg > 0;
+    return {
+      srNo: srNo || String(startingSrNo + idx),
+      description,
+      weightKg,
+      valid,
+    };
+  });
+}
+
+function BulkAddItemsModal({ existingCount, onCancel, onSave }) {
+  const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const parsed = useMemo(
+    () => parseBulkItemsText(text, existingCount + 1),
+    [text, existingCount]
+  );
+  const validRows = parsed.filter((r) => r.valid);
+  const invalidCount = parsed.length - validRows.length;
+
+  async function submit(e) {
+    e.preventDefault();
+    if (validRows.length === 0) return;
+    setSaving(true);
+    try {
+      await onSave(
+        validRows.map(({ srNo, description, weightKg }) => ({
+          srNo: Number(srNo) || 0,
+          description,
+          weightKg,
+        }))
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay">
+      <form onSubmit={submit} className="modal-panel bulk-modal">
+        <h3 className="modal-title">Bulk Add Items</h3>
+        <p className="bulk-hint">
+          Paste rows copied straight from Excel — either <code>No. · Description · Wt./Kg</code>{" "}
+          or just <code>Description · Wt./Kg</code> (item numbers will be auto-assigned).
+        </p>
+
+        <textarea
+          autoFocus
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={"30\tBridge Part -3\t7798.6\n40\tBridge Part -4\t12796.9\n50\tClearing Rake\t18109.96"}
+          rows={8}
+          className="input bulk-textarea"
+        />
+
+        {parsed.length > 0 && (
+          <div>
+            <div className="bulk-summary">
+              <span className="bulk-summary-ok">{validRows.length} row{validRows.length === 1 ? "" : "s"} ready</span>
+              {invalidCount > 0 && (
+                <span className="bulk-summary-bad">
+                  {invalidCount} row{invalidCount === 1 ? "" : "s"} skipped (missing description or weight)
+                </span>
+              )}
+            </div>
+            <div className="item-list bulk-preview">
+              {parsed.map((r, i) => (
+                <div key={i} className={`item-list-row${r.valid ? "" : " bulk-row-invalid"}`}>
+                  <div className="item-list-desc">
+                    <span className="item-list-sr">{r.srNo}</span>
+                    {r.description || <em className="text-muted">(no description)</em>}
+                  </div>
+                  <span className="bulk-preview-weight tabular">
+                    {Number.isFinite(r.weightKg) ? `${fmtNum(r.weightKg, 2)} kg` : "—"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="modal-actions">
+          <button type="button" onClick={onCancel} className="btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" disabled={validRows.length === 0 || saving} className="btn-primary">
+            {saving ? "Adding…" : `Add ${validRows.length || ""} Item${validRows.length === 1 ? "" : "s"}`}
           </button>
         </div>
       </form>
