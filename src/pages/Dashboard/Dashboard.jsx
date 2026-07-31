@@ -188,7 +188,7 @@ export default function Dashboard() {
                   className="input"
                 />
               </Field>
-              <Field label="Mat. Adv.:">
+              <Field label="Opening Material Advance (₹)">
                 <input
                   type="number"
                   value={form.openingMatAdvance}
