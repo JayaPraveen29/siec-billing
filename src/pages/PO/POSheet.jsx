@@ -20,9 +20,33 @@ import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import StatCard from "../../components/StatCard";
+import { usePOImport } from "../../hooks/usePOImport";
+import ImportPOModal from "./ImportPOModal";
 import "./POSheet.css";
 
 const emptyItem = { srNo: "", description: "", weightKg: "" };
+
+// --- DD-MM-YY <-> ISO (yyyy-mm-dd) helpers for manual date entry ---
+function ddmmyyToIso(str) {
+  const m = /^(\d{2})-(\d{2})-(\d{2})$/.exec((str || "").trim());
+  if (!m) return null;
+  const [, dd, mm, yy] = m;
+  const day = Number(dd);
+  const month = Number(mm);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const year = 2000 + Number(yy);
+  return `${year}-${mm}-${dd}`;
+}
+
+function isoToDdmmyy(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}-${mm}-${yy}`;
+}
 
 export default function POSheet() {
   const { id } = useParams();
@@ -36,6 +60,11 @@ export default function POSheet() {
   const [bulkModal, setBulkModal] = useState(false);
   const [invoiceModal, setInvoiceModal] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null); // {type, id}
+
+  // Excel import: all orchestration logic lives in usePOImport (hooks/usePOImport.js),
+  // this page only needs the modal-open state + the handler it exposes.
+  const { importModalOpen, openImportModal, closeImportModal, handleImportPOSheet } =
+    usePOImport(id, items);
 
   useEffect(() => {
     const unsub = subscribePOSheets((all) => {
@@ -52,6 +81,56 @@ export default function POSheet() {
     if (!po || !items || !invoices) return null;
     return computePOLedger(po, items, invoices);
   }, [po, items, invoices]);
+
+  // Raw invoices (each carries an `allocations` map of itemId -> qty billed),
+  // sorted chronologically so matrix columns read left-to-right by date.
+  const sortedInvoicesForMatrix = useMemo(() => {
+    if (!invoices) return [];
+    return [...invoices].sort((a, b) => {
+      const dateCompare = (a.invoiceDate || "").localeCompare(b.invoiceDate || "");
+      if (dateCompare !== 0) return dateCompare;
+      return (a.invoiceNo || "").localeCompare(b.invoiceNo || "");
+    });
+  }, [invoices]);
+
+  // Lookup from invoice id -> its computed ledger row (basic, gst, netReceivable, etc.)
+  // so the summary rows below the item matrix can pull per-invoice figures.
+  const invoiceRowById = useMemo(() => {
+    const map = {};
+    (ledger?.invoiceRows || []).forEach((r) => {
+      map[r.id] = r;
+    });
+    return map;
+  }, [ledger]);
+
+  // The 11 Excel-style summary rows shown below the item matrix, one column per invoice.
+  const SUMMARY_ROW_DEFS = useMemo(() => {
+    if (!po) return [];
+    return [
+      { no: 1, label: "Unit Rate", getVal: (r) => (r && r.qty > 0 ? po.unitRate : null) },
+      { no: 2, label: "Basic Value", getVal: (r) => r?.basic },
+      { no: 3, label: `GST @ ${po.gstPercent}%`, getVal: (r) => r?.gst },
+      { no: 4, label: "Round Off", getVal: (r) => r?.roundOff },
+      { no: 5, label: "Total Invoice Value", getVal: (r) => r?.totalInvoiceValue, bold: true },
+      { no: 6, label: `Material Advance @ ${po.matAdvPercent}%`, getVal: (r) => r?.matAdvance },
+      { no: 7, label: `TDS @ ${po.tdsPercent}%`, getVal: (r) => r?.tds },
+      {
+        no: 8,
+        label: "Net Receivable",
+        getVal: (r) => r?.netReceivable,
+        bold: true,
+        accentClass: "text-rivet2",
+      },
+      { no: 9, label: "Bala. Mat. Advance", getVal: (r) => r?.matAdvanceBalance },
+      { no: 10, label: "Payment received", getVal: (r) => r?.paymentReceived },
+      {
+        no: 11,
+        label: "Bal to be received",
+        getVal: (r) => r?.balanceToReceive,
+        accentFn: (v) => (v > 0.5 ? "text-warn" : "text-ok"),
+      },
+    ];
+  }, [po]);
 
   if (po === null || items === null || invoices === null) {
     return (
@@ -123,11 +202,14 @@ export default function POSheet() {
         />
       </div>
 
-      {/* ITEMS */}
+      {/* ITEMS (Excel-style matrix: items down the rows, invoices across as columns) */}
       <section className="po-section">
         <div className="po-section-header">
           <h2 className="section-title">Items</h2>
           <div className="header-btn-group">
+            <button onClick={openImportModal} className="btn-outline">
+              <ClipboardPaste size={15} /> Import from Excel
+            </button>
             <button onClick={() => setBulkModal(true)} className="btn-outline">
               <ClipboardPaste size={15} /> Bulk Add
             </button>
@@ -137,18 +219,65 @@ export default function POSheet() {
             >
               <Plus size={15} /> Add Item
             </button>
+            <button
+              onClick={() => setInvoiceModal({ mode: "new", data: null })}
+              disabled={ledger.itemRows.length === 0}
+              className="btn-primary"
+            >
+              <Plus size={15} /> Add Invoice
+            </button>
           </div>
         </div>
         <div className="table-scroll">
-          <table className="ledger-table">
+          <table className="ledger-table po-matrix-table">
             <thead>
               <tr>
-                <th>No.</th>
-                <th>Description</th>
-                <th className="text-right">Wt./Kg</th>
-                <th className="text-right">Allocated</th>
-                <th className="text-right">Balance</th>
-                <th></th>
+                <th rowSpan={4}>No.</th>
+                <th rowSpan={4}>Description</th>
+                <th rowSpan={4} className="text-right">Wt./Kg</th>
+                {sortedInvoicesForMatrix.length > 0 && (
+                  <th colSpan={sortedInvoicesForMatrix.length} className="text-center">
+                    Invoice Numbers
+                  </th>
+                )}
+                <th rowSpan={4} className="text-right">Bala/Total</th>
+                <th rowSpan={4}></th>
+              </tr>
+              <tr>
+                {sortedInvoicesForMatrix.map((inv) => (
+                  <th key={inv.id} className="text-right">
+                    {inv.invoiceNo}
+                  </th>
+                ))}
+              </tr>
+              <tr>
+                {sortedInvoicesForMatrix.map((inv) => (
+                  <th key={inv.id} className="text-right text-muted">
+                    {fmtDate(inv.invoiceDate)}
+                  </th>
+                ))}
+              </tr>
+              <tr>
+                {sortedInvoicesForMatrix.map((inv) => (
+                  <th key={inv.id} className="text-right">
+                    <div className="row-actions" style={{ justifyContent: "flex-end" }}>
+                      <button
+                        onClick={() => setInvoiceModal({ mode: "edit", data: invoiceRowById[inv.id] })}
+                        className="edit-btn"
+                        title="Edit invoice"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget({ type: "invoice", id: inv.id })}
+                        className="delete-btn"
+                        title="Delete invoice"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -157,9 +286,16 @@ export default function POSheet() {
                   <td>{it.srNo}</td>
                   <td>{it.description}</td>
                   <td className="text-right tabular">{fmtNum(it.weightKg, 2)}</td>
-                  <td className="text-right tabular text-muted">{fmtNum(it.allocated, 2)}</td>
+                  {sortedInvoicesForMatrix.map((inv) => {
+                    const qty = Number(inv.allocations?.[it.id]) || 0;
+                    return (
+                      <td key={inv.id} className="text-right tabular">
+                        {qty > 0 ? fmtNum(qty, 2) : "-"}
+                      </td>
+                    );
+                  })}
                   <td className={`text-right tabular ${it.balanceQty > 0.001 ? "text-warn" : "text-ok"}`}>
-                    {fmtNum(it.balanceQty, 2)}
+                    {it.balanceQty > 0.001 ? fmtNum(it.balanceQty, 2) : "-"}
                   </td>
                   <td>
                     <div className="row-actions">
@@ -181,7 +317,11 @@ export default function POSheet() {
               ))}
               {ledger.itemRows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center text-muted" style={{ padding: "1.5rem 0" }}>
+                  <td
+                    colSpan={5 + sortedInvoicesForMatrix.length}
+                    className="text-center text-muted"
+                    style={{ padding: "1.5rem 0" }}
+                  >
                     No items yet.
                   </td>
                 </tr>
@@ -192,124 +332,76 @@ export default function POSheet() {
                 <tr>
                   <td colSpan={2}>Total</td>
                   <td className="text-right tabular">{fmtNum(ledger.totals.weightKg, 2)}</td>
-                  <td className="text-right tabular">{fmtNum(ledger.totals.qty, 2)}</td>
+                  {sortedInvoicesForMatrix.map((inv) => {
+                    const colTotal = ledger.itemRows.reduce(
+                      (sum, it) => sum + (Number(inv.allocations?.[it.id]) || 0),
+                      0
+                    );
+                    return (
+                      <td key={inv.id} className="text-right tabular">
+                        {colTotal > 0 ? fmtNum(colTotal, 2) : "-"}
+                      </td>
+                    );
+                  })}
                   <td className="text-right tabular">{fmtNum(ledger.totals.balanceQty, 2)}</td>
                   <td></td>
                 </tr>
               </tfoot>
             )}
-          </table>
-        </div>
-      </section>
 
-      {/* INVOICES */}
-      <section className="po-section">
-        <div className="po-section-header">
-          <h2 className="section-title">Invoice</h2>
-          <button
-            onClick={() => setInvoiceModal({ mode: "new", data: null })}
-            disabled={ledger.itemRows.length === 0}
-            className="btn-primary"
-          >
-            <Plus size={15} /> Add Invoice
-          </button>
-        </div>
+            {/* Invoice financial summary rows: Unit Rate through Bal to be received,
+                one column per invoice (same columns as the item matrix above). */}
+            {sortedInvoicesForMatrix.length > 0 && (
+              <tbody className="po-summary-rows">
+                {SUMMARY_ROW_DEFS.map((def) => {
+                  const rowTotal =
+                    def.no === 1
+                      ? null
+                      : sortedInvoicesForMatrix.reduce((sum, inv) => {
+                          const r = invoiceRowById[inv.id];
+                          return sum + (Number(def.getVal(r)) || 0);
+                        }, 0);
 
-        <div className="table-scroll">
-          <table className="ledger-table">
-            <thead>
-              <tr>
-                <th>Inv. No.</th>
-                <th>Date</th>
-                <th className="text-right">Wt./Kg</th>
-                <th className="text-right">Basic</th>
-                <th className="text-right">GST</th>
-                <th className="text-right">Round Off</th>
-                <th className="text-right">Total Inv.</th>
-                <th className="text-right">Mat. Adv.</th>
-                <th className="text-right">TDS</th>
-                <th className="text-right">Net Recv.</th>
-                <th className="text-right">Adv. Bal.</th>
-                <th className="text-right">Payment</th>
-                <th>Paid On</th>
-                <th className="text-right">Balance</th>
-                <th className="text-right">Days</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {ledger.invoiceRows.map((inv) => (
-                <tr key={inv.id}>
-                  <td>{inv.invoiceNo}</td>
-                  <td>{fmtDate(inv.invoiceDate)}</td>
-                  <td className="text-right tabular">{fmtNum(inv.qty, 2)}</td>
-                  <td className="text-right tabular">{fmtNum(inv.basic, 0)}</td>
-                  <td className="text-right tabular">{fmtNum(inv.gst, 0)}</td>
-                  <td className="text-right tabular">{fmtNum(inv.roundOff, 0)}</td>
-                  <td className="text-right tabular" style={{ fontWeight: 600 }}>
-                    {fmtNum(inv.totalInvoiceValue, 0)}
-                  </td>
-                  <td className="text-right tabular">{fmtNum(inv.matAdvance, 0)}</td>
-                  <td className="text-right tabular">{fmtNum(inv.tds, 0)}</td>
-                  <td className="text-right tabular text-rivet2" style={{ fontWeight: 600 }}>
-                    {fmtNum(inv.netReceivable, 0)}
-                  </td>
-                  <td className="text-right tabular text-muted">{fmtNum(inv.matAdvanceBalance, 0)}</td>
-                  <td className="text-right tabular">{fmtNum(inv.paymentReceived, 0)}</td>
-                  <td>{fmtDate(inv.paymentDate)}</td>
-                  <td className={`text-right tabular ${inv.balanceToReceive > 0.5 ? "text-warn" : "text-ok"}`}>
-                    {fmtNum(inv.balanceToReceive, 0)}
-                  </td>
-                  <td className="text-right tabular text-muted">{inv.days ?? "-"}</td>
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        onClick={() => setInvoiceModal({ mode: "edit", data: inv })}
-                        className="edit-btn"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget({ type: "invoice", id: inv.id })}
-                        className="delete-btn"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {ledger.invoiceRows.length === 0 && (
-                <tr>
-                  <td colSpan={16} className="text-center text-muted" style={{ padding: "1.5rem 0" }}>
-                    No invoices raised yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-            {ledger.invoiceRows.length > 0 && (
-              <tfoot>
-                <tr>
-                  <td colSpan={2}>Total</td>
-                  <td className="text-right tabular">{fmtNum(ledger.totals.qty, 2)}</td>
-                  <td className="text-right tabular">{fmtNum(ledger.totals.basic, 0)}</td>
-                  <td className="text-right tabular">{fmtNum(ledger.totals.gst, 0)}</td>
-                  <td className="text-right tabular">{fmtNum(ledger.totals.roundOff, 0)}</td>
-                  <td className="text-right tabular">{fmtNum(ledger.totals.totalInvoiceValue, 0)}</td>
-                  <td className="text-right tabular">{fmtNum(ledger.totals.matAdvance, 0)}</td>
-                  <td className="text-right tabular">{fmtNum(ledger.totals.tds, 0)}</td>
-                  <td className="text-right tabular text-rivet2">{fmtNum(ledger.totals.netReceivable, 0)}</td>
-                  <td className="text-right tabular">{fmtNum(ledger.matAdvanceBalance, 0)}</td>
-                  <td className="text-right tabular">{fmtNum(ledger.totals.paymentReceived, 0)}</td>
-                  <td></td>
-                  <td className="text-right tabular">{fmtNum(ledger.totals.balanceToReceive, 0)}</td>
-                  <td colSpan={2}></td>
-                </tr>
-              </tfoot>
+                  return (
+                    <tr key={def.no} className={def.bold ? "po-summary-row-bold" : undefined}>
+                      <td colSpan={2}>
+                        {def.no} {def.label}
+                      </td>
+                      <td className="text-right tabular text-muted">-</td>
+                      {sortedInvoicesForMatrix.map((inv) => {
+                        const r = invoiceRowById[inv.id];
+                        const raw = def.getVal(r);
+                        const display =
+                          raw && raw !== 0
+                            ? fmtNum(raw, def.no === 1 ? 2 : 0)
+                            : "-";
+                        const accentClass = def.accentFn ? def.accentFn(raw || 0) : def.accentClass || "";
+                        return (
+                          <td
+                            key={inv.id}
+                            className={`text-right tabular ${accentClass}`}
+                            style={def.bold ? { fontWeight: 600 } : undefined}
+                          >
+                            {display}
+                          </td>
+                        );
+                      })}
+                      <td className="text-right tabular" style={def.bold ? { fontWeight: 600 } : undefined}>
+                        {def.no === 1 || !rowTotal ? "-" : fmtNum(rowTotal, 0)}
+                      </td>
+                      <td></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
             )}
           </table>
         </div>
       </section>
+
+      {importModalOpen && (
+        <ImportPOModal onCancel={closeImportModal} onImport={handleImportPOSheet} />
+      )}
 
       {bulkModal && (
         <BulkAddItemsModal
@@ -495,11 +587,7 @@ function BulkAddItemsModal({ existingCount, onCancel, onSave }) {
     <div className="modal-overlay">
       <form onSubmit={submit} className="modal-panel bulk-modal">
         <h3 className="modal-title">Bulk Add Items</h3>
-        <p className="bulk-hint">
-          Paste rows copied straight from Excel — either <code>No. · Description · Wt./Kg</code>{" "}
-          or just <code>Description · Wt./Kg</code> (item numbers will be auto-assigned).
-        </p>
-
+      
         <textarea
           autoFocus
           value={text}
@@ -550,9 +638,10 @@ function BulkAddItemsModal({ existingCount, onCancel, onSave }) {
 
 function InvoiceModal({ mode, data, items, onCancel, onSave }) {
   const [invoiceNo, setInvoiceNo] = useState(data?.invoiceNo ?? "");
-  const [invoiceDate, setInvoiceDate] = useState(toInputDate(data?.invoiceDate) || "");
-  const [paymentReceived, setPaymentReceived] = useState(data?.paymentReceived ?? "");
-  const [paymentDate, setPaymentDate] = useState(toInputDate(data?.paymentDate) || "");
+  const [invoiceDateText, setInvoiceDateText] = useState(
+    isoToDdmmyy(toInputDate(data?.invoiceDate)) || ""
+  );
+  const [invoiceDateError, setInvoiceDateError] = useState("");
   const [allocations, setAllocations] = useState(() => {
     const base = {};
     items.forEach((it) => {
@@ -569,18 +658,36 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
     data?.roundOffOverride ?? ""
   );
 
+  function handleDateChange(raw) {
+    // Auto-insert dashes as the user types digits: 280326 -> 28-03-26
+    let digits = raw.replace(/[^0-9]/g, "").slice(0, 6);
+    let formatted = digits;
+    if (digits.length > 4) {
+      formatted = `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
+    } else if (digits.length > 2) {
+      formatted = `${digits.slice(0, 2)}-${digits.slice(2)}`;
+    }
+    setInvoiceDateText(formatted);
+    setInvoiceDateError("");
+  }
+
   function submit(e) {
     e.preventDefault();
+
+    const isoInvoiceDate = ddmmyyToIso(invoiceDateText);
+    if (!isoInvoiceDate) {
+      setInvoiceDateError("Enter date as DD-MM-YY, e.g. DD-MM-YY");
+      return;
+    }
+
     const cleanAllocations = {};
     Object.entries(allocations).forEach(([k, v]) => {
       if (v !== "" && Number(v) !== 0) cleanAllocations[k] = Number(v);
     });
     onSave({
       invoiceNo: invoiceNo.trim(),
-      invoiceDate,
+      invoiceDate: isoInvoiceDate,
       allocations: cleanAllocations,
-      paymentReceived: Number(paymentReceived) || 0,
-      paymentDate: paymentDate || null,
       matAdvanceOverride: matAdvanceOverride === "" ? "" : Number(matAdvanceOverride),
       tdsOverride: tdsOverride === "" ? "" : Number(tdsOverride),
       roundOffOverride: roundOffOverride === "" ? "" : Number(roundOffOverride),
@@ -607,12 +714,19 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
             <span className="field-label">Invoice Date</span>
             <input
               required
-              type="date"
-              value={invoiceDate}
-              onChange={(e) => setInvoiceDate(e.target.value)}
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={invoiceDateText}
+              onChange={(e) => handleDateChange(e.target.value)}
+              placeholder="28-03-26"
+              maxLength={8}
               className="input"
               style={{ marginTop: "0.25rem" }}
             />
+            {invoiceDateError && (
+              <span className="field-error">{invoiceDateError}</span>
+            )}
           </label>
         </div>
 
@@ -641,29 +755,6 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
               </div>
             ))}
           </div>
-        </div>
-
-        <div className="form-row-2">
-          <label style={{ display: "block" }}>
-            <span className="field-label">Payment Received (₹)</span>
-            <input
-              type="number"
-              value={paymentReceived}
-              onChange={(e) => setPaymentReceived(e.target.value)}
-              className="input"
-              style={{ marginTop: "0.25rem" }}
-            />
-          </label>
-          <label style={{ display: "block" }}>
-            <span className="field-label">Payment Date</span>
-            <input
-              type="date"
-              value={paymentDate}
-              onChange={(e) => setPaymentDate(e.target.value)}
-              className="input"
-              style={{ marginTop: "0.25rem" }}
-            />
-          </label>
         </div>
 
         <button

@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard/Dashboard";
-import POSheet from "./pages/POSheet/POSheet";
+import POSheet from "./pages/po/POSheet";
 import ABSReport from "./pages/ABSReport/ABSReport";
 import "./App.css";
 
