@@ -89,6 +89,8 @@ export function usePOImport(poId, items) {
           invoiceDate: inv.invoiceDate,
           allocations,
           paymentReceived: inv.paymentReceived || 0,
+          ...(inv.matAdvanceOverride !== undefined ? { matAdvanceOverride: inv.matAdvanceOverride } : {}),
+          ...(inv.tdsOverride !== undefined ? { tdsOverride: inv.tdsOverride } : {}),
         });
       }
 

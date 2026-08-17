@@ -124,6 +124,8 @@ export function parsePOSheet(workbook, sheetName) {
   let tdsPercent = 0.1;
   let matAdvPercent = 20;
   let paymentRow = null;
+  let matAdvRow = null;
+  let tdsRow = null;
 
   for (let r = row; r < row + 20 && r < MAX_SCAN_ROW; r++) {
     const labelCell = cellAt(ws, r, 2);
@@ -139,10 +141,16 @@ export function parsePOSheet(workbook, sheetName) {
     if (gstMatch) gstPercent = Number(gstMatch[1]);
 
     const tdsMatch = label.match(/tds\s*@\s*([\d.]+)\s*%/i);
-    if (tdsMatch) tdsPercent = Number(tdsMatch[1]);
+    if (tdsMatch) {
+      tdsPercent = Number(tdsMatch[1]);
+      tdsRow = r;
+    }
 
     const advMatch = label.match(/material advance\s*@\s*([\d.]+)\s*%/i);
-    if (advMatch) matAdvPercent = Number(advMatch[1]);
+    if (advMatch) {
+      matAdvPercent = Number(advMatch[1]);
+      matAdvRow = r;
+    }
 
     if (lower.includes("payment received")) paymentRow = r;
   }
@@ -156,10 +164,38 @@ export function parsePOSheet(workbook, sheetName) {
     });
   }
 
+  // Detect manual overrides in the Material Advance / TDS rows. A cell driven
+  // by a formula (cell.f) is auto-calculated the same way the app calculates
+  // it, so no override is needed. A plain literal number in that row is a
+  // manual override (e.g. a closing invoice with a hand-typed advance
+  // adjustment). A cell left completely blank where its neighbours all have
+  // formulas means TDS was deliberately skipped for that invoice — treat
+  // that as an explicit override of 0 rather than letting the app compute it.
+  function readOverrideRow(sourceRow, { blankMeansZero }) {
+    const overrides = {};
+    if (!sourceRow) return overrides;
+    invoiceCols.forEach(({ col, invoiceNo }) => {
+      const cell = cellAt(ws, sourceRow, col);
+      if (!cell || cell.v === undefined || cell.v === "") {
+        if (blankMeansZero) overrides[invoiceNo] = 0;
+        return;
+      }
+      if (cell.f) return; // formula-driven, matches the app's own calculation
+      const val = Number(cell.v);
+      if (Number.isFinite(val)) overrides[invoiceNo] = val;
+    });
+    return overrides;
+  }
+
+  const matAdvOverrideByInvoiceNo = readOverrideRow(matAdvRow, { blankMeansZero: false });
+  const tdsOverrideByInvoiceNo = readOverrideRow(tdsRow, { blankMeansZero: true });
+
   const invoices = invoiceCols.map(({ invoiceNo, invoiceDate }) => ({
     invoiceNo,
     invoiceDate,
     paymentReceived: paymentByInvoiceNo[invoiceNo] || 0,
+    matAdvanceOverride: matAdvOverrideByInvoiceNo[invoiceNo],
+    tdsOverride: tdsOverrideByInvoiceNo[invoiceNo],
     allocationsByItemSrNo: items.reduce((acc, it) => {
       if (it.allocations[invoiceNo]) acc[it.srNo] = it.allocations[invoiceNo];
       return acc;

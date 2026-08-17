@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Plus, Pencil, Trash2, ChevronDown, ClipboardPaste } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, ChevronDown, ClipboardPaste, Settings } from "lucide-react";
 import {
   addInvoice,
   addItem,
@@ -60,6 +60,44 @@ export default function POSheet() {
   const [bulkModal, setBulkModal] = useState(false);
   const [invoiceModal, setInvoiceModal] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null); // {type, id}
+  const [settingsModal, setSettingsModal] = useState(false);
+
+  // Draft values for the inline-editable Unit Rate cells (one per invoice
+  // column) — some invoices don't follow the PO's default unit rate.
+  const [unitRateDrafts, setUnitRateDrafts] = useState({});
+  // Which invoice's Unit Rate cell is currently in edit mode. Double-click
+  // a value to edit it; it reverts to plain text on save/cancel.
+  const [editingUnitRateId, setEditingUnitRateId] = useState(null);
+
+  function startEditingUnitRate(inv) {
+    setUnitRateDrafts((prev) => ({
+      ...prev,
+      [inv.id]: inv.unitRateOverride ?? "",
+    }));
+    setEditingUnitRateId(inv.id);
+  }
+
+  function cancelEditingUnitRate(invoiceId) {
+    setUnitRateDrafts((prev) => {
+      const next = { ...prev };
+      delete next[invoiceId];
+      return next;
+    });
+    setEditingUnitRateId(null);
+  }
+
+  async function handleUnitRateOverrideChange(invoiceId, rawValue) {
+    const value = rawValue.trim();
+    await updateInvoice(id, invoiceId, {
+      unitRateOverride: value === "" ? "" : Number(value),
+    });
+    setUnitRateDrafts((prev) => {
+      const next = { ...prev };
+      delete next[invoiceId];
+      return next;
+    });
+    setEditingUnitRateId(null);
+  }
 
   // Excel import: all orchestration logic lives in usePOImport (hooks/usePOImport.js),
   // this page only needs the modal-open state + the handler it exposes.
@@ -87,8 +125,9 @@ export default function POSheet() {
   const sortedInvoicesForMatrix = useMemo(() => {
     if (!invoices) return [];
     return [...invoices].sort((a, b) => {
-      const dateCompare = (a.invoiceDate || "").localeCompare(b.invoiceDate || "");
-      if (dateCompare !== 0) return dateCompare;
+      const da = a.invoiceDate ? new Date(a.invoiceDate).getTime() : Infinity;
+      const db = b.invoiceDate ? new Date(b.invoiceDate).getTime() : Infinity;
+      if (da !== db) return da - db;
       return (a.invoiceNo || "").localeCompare(b.invoiceNo || "");
     });
   }, [invoices]);
@@ -107,7 +146,7 @@ export default function POSheet() {
   const SUMMARY_ROW_DEFS = useMemo(() => {
     if (!po) return [];
     return [
-      { no: 1, label: "Unit Rate", getVal: (r) => (r && r.qty > 0 ? po.unitRate : null) },
+      { no: 1, label: "Unit Rate", getVal: (r) => (r ? r.unitRate : null) },
       { no: 2, label: "Basic Value", getVal: (r) => r?.basic },
       { no: 3, label: `GST @ ${po.gstPercent}%`, getVal: (r) => r?.gst },
       { no: 4, label: "Round Off", getVal: (r) => r?.roundOff },
@@ -121,13 +160,18 @@ export default function POSheet() {
         bold: true,
         accentClass: "text-rivet2",
       },
-      { no: 9, label: "Bala. Mat. Advance", getVal: (r) => r?.matAdvanceBalance },
+      // Running-balance rows: these track a cumulative balance carried
+      // forward invoice-to-invoice (like a bank balance), not a per-invoice
+      // amount that's meaningful to add up. Their "Total" column should show
+      // the latest running value, not sum every invoice's snapshot of it.
+      { no: 9, label: "Bala. Mat. Advance", getVal: (r) => r?.matAdvanceBalance, totalMode: "last" },
       { no: 10, label: "Payment received", getVal: (r) => r?.paymentReceived },
       {
         no: 11,
         label: "Bal to be received",
         getVal: (r) => r?.balanceToReceive,
         accentFn: (v) => (v > 0.5 ? "text-warn" : "text-ok"),
+        totalMode: "last",
       },
     ];
   }, [po]);
@@ -170,21 +214,35 @@ export default function POSheet() {
     setDeleteTarget(null);
   }
 
+  async function handleSaveSettings(data) {
+    await updatePOSheet(id, data);
+    setSettingsModal(false);
+  }
+
   return (
     <div className="po-page">
       <button onClick={() => navigate("/")} className="back-link">
         <ArrowLeft size={15} /> Back to register
       </button>
 
-      <TitleBlock
-        docType="PO Billing Ledger"
-        fields={[
-          { label: "PO No.", value: po.poNumber },
-          { label: "Sheet Code", value: po.code },
-          { label: "Unit Rate", value: `₹${fmtNum(po.unitRate, 2)}/kg` },
-          { label: "GST", value: `${po.gstPercent}%` },
-        ]}
-      />
+      <div className="po-titleblock-row">
+        <TitleBlock
+          docType="PO Billing Ledger"
+          fields={[
+            { label: "PO No.", value: po.poNumber },
+            { label: "Sheet Code", value: po.code },
+            { label: "Unit Rate", value: `₹${fmtNum(po.unitRate, 2)}/kg` },
+            { label: "GST", value: `${po.gstPercent}%` },
+          ]}
+        />
+        <button
+          onClick={() => setSettingsModal(true)}
+          className="btn-outline po-settings-btn"
+          title="Edit Unit Rate, GST, TDS, Material Advance %"
+        >
+          <Settings size={15} /> Edit Rate & Settings
+        </button>
+      </div>
       {po.title && <p className="po-title-desc">{po.title}</p>}
 
       <div className="po-stat-grid">
@@ -353,22 +411,101 @@ export default function POSheet() {
                 one column per invoice (same columns as the item matrix above). */}
             {sortedInvoicesForMatrix.length > 0 && (
               <tbody className="po-summary-rows">
+                <tr className="po-summary-row-bold">
+                  <td></td>
+                  <td>Total Weight</td>
+                  <td className="text-right tabular">{fmtNum(ledger.totals.weightKg, 2)}</td>
+                  {sortedInvoicesForMatrix.map((inv) => {
+                    const r = invoiceRowById[inv.id];
+                    const qty = r?.qty;
+                    return (
+                      <td key={inv.id} className="text-right tabular" style={{ fontWeight: 600 }}>
+                        {qty > 0 ? fmtNum(qty, 2) : "-"}
+                      </td>
+                    );
+                  })}
+                  <td className="text-right tabular" style={{ fontWeight: 600 }}>
+                    {ledger.totals.balanceQty > 0.001 ? fmtNum(ledger.totals.balanceQty, 2) : "-"}
+                  </td>
+                  <td></td>
+                </tr>
                 {SUMMARY_ROW_DEFS.map((def) => {
-                  const rowTotal =
-                    def.no === 1
-                      ? null
-                      : sortedInvoicesForMatrix.reduce((sum, inv) => {
-                          const r = invoiceRowById[inv.id];
-                          return sum + (Number(def.getVal(r)) || 0);
-                        }, 0);
+                  let rowTotal = null;
+                  if (def.no !== 1) {
+                    if (def.totalMode === "last") {
+                      const lastInv =
+                        sortedInvoicesForMatrix[sortedInvoicesForMatrix.length - 1];
+                      const r = lastInv ? invoiceRowById[lastInv.id] : null;
+                      rowTotal = Number(def.getVal(r)) || 0;
+                    } else {
+                      rowTotal = sortedInvoicesForMatrix.reduce((sum, inv) => {
+                        const r = invoiceRowById[inv.id];
+                        return sum + (Number(def.getVal(r)) || 0);
+                      }, 0);
+                    }
+                  }
 
                   return (
                     <tr key={def.no} className={def.bold ? "po-summary-row-bold" : undefined}>
-                      <td colSpan={2}>
-                        {def.no} {def.label}
+                      <td>{def.no}</td>
+                      <td>{def.label}</td>
+                      <td
+                        className="text-right tabular"
+                        style={def.bold ? { fontWeight: 600 } : undefined}
+                      >
+                        {def.no === 1
+                          ? fmtNum(po.unitRate, 2)
+                          : rowTotal
+                          ? fmtNum(rowTotal, 0)
+                          : "-"}
                       </td>
-                      <td className="text-right tabular text-muted">-</td>
                       {sortedInvoicesForMatrix.map((inv) => {
+                        if (def.no === 1) {
+                          const r = invoiceRowById[inv.id];
+                          const effectiveRate = r?.unitRate ?? po.unitRate;
+
+                          if (editingUnitRateId === inv.id) {
+                            const draft = unitRateDrafts[inv.id];
+                            const value = draft !== undefined ? draft : "";
+                            return (
+                              <td key={inv.id} className="text-right tabular">
+                                <input
+                                  autoFocus
+                                  type="number"
+                                  step="0.01"
+                                  value={value}
+                                  onChange={(e) =>
+                                    setUnitRateDrafts((prev) => ({
+                                      ...prev,
+                                      [inv.id]: e.target.value,
+                                    }))
+                                  }
+                                  onFocus={(e) => e.target.select()}
+                                  onBlur={(e) =>
+                                    handleUnitRateOverrideChange(inv.id, e.target.value)
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") e.target.blur();
+                                    if (e.key === "Escape") cancelEditingUnitRate(inv.id);
+                                  }}
+                                  className="input po-unit-rate-input"
+                                  title="Leave blank to use the PO's default unit rate"
+                                />
+                              </td>
+                            );
+                          }
+
+                          return (
+                            <td
+                              key={inv.id}
+                              className="text-right tabular po-unit-rate-display"
+                              onDoubleClick={() => startEditingUnitRate(inv)}
+                              title="Double-click to edit"
+                            >
+                              {fmtNum(effectiveRate, 2)}
+                            </td>
+                          );
+                        }
                         const r = invoiceRowById[inv.id];
                         const raw = def.getVal(r);
                         const display =
@@ -398,6 +535,14 @@ export default function POSheet() {
           </table>
         </div>
       </section>
+
+      {settingsModal && (
+        <PoSettingsModal
+          po={po}
+          onCancel={() => setSettingsModal(false)}
+          onSave={handleSaveSettings}
+        />
+      )}
 
       {importModalOpen && (
         <ImportPOModal onCancel={closeImportModal} onImport={handleImportPOSheet} />
@@ -441,6 +586,114 @@ export default function POSheet() {
   );
 }
 
+// Edit the PO header settings — Unit Rate, GST %, TDS %, Material Advance %,
+// Opening Material Advance — the same values that live in cells C17, and the
+// "GST @ x%" / "TDS @ x%" / "Material Advance @ x%" row labels + M2 in the
+// source spreadsheet. These drive every downstream formula in ledger.js.
+function PoSettingsModal({ po, onCancel, onSave }) {
+  const [form, setForm] = useState({
+    unitRate: po.unitRate ?? "",
+    gstPercent: po.gstPercent ?? "",
+    tdsPercent: po.tdsPercent ?? "",
+    matAdvPercent: po.matAdvPercent ?? "",
+    openingMatAdvance: po.openingMatAdvance ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await onSave({
+        unitRate: Number(form.unitRate) || 0,
+        gstPercent: Number(form.gstPercent) || 0,
+        tdsPercent: Number(form.tdsPercent) || 0,
+        matAdvPercent: Number(form.matAdvPercent) || 0,
+        openingMatAdvance: Number(form.openingMatAdvance) || 0,
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay">
+      <form onSubmit={submit} className="modal-panel">
+        <h3 className="modal-title">Edit Rate & Settings</h3>
+
+        <label style={{ display: "block" }}>
+          <span className="field-label">Unit Rate (₹/kg)</span>
+          <input
+            type="number"
+            step="0.01"
+            required
+            value={form.unitRate}
+            onChange={(e) => setForm({ ...form, unitRate: e.target.value })}
+            className="input"
+            style={{ marginTop: "0.25rem" }}
+          />
+        </label>
+
+        <div className="form-row-3" style={{ marginTop: "0.75rem" }}>
+          <label style={{ display: "block" }}>
+            <span className="field-label">GST %</span>
+            <input
+              type="number"
+              step="0.01"
+              value={form.gstPercent}
+              onChange={(e) => setForm({ ...form, gstPercent: e.target.value })}
+              className="input"
+              style={{ marginTop: "0.25rem" }}
+            />
+          </label>
+          <label style={{ display: "block" }}>
+            <span className="field-label">TDS %</span>
+            <input
+              type="number"
+              step="0.01"
+              value={form.tdsPercent}
+              onChange={(e) => setForm({ ...form, tdsPercent: e.target.value })}
+              className="input"
+              style={{ marginTop: "0.25rem" }}
+            />
+          </label>
+          <label style={{ display: "block" }}>
+            <span className="field-label">Mat. Adv. %</span>
+            <input
+              type="number"
+              step="0.01"
+              value={form.matAdvPercent}
+              onChange={(e) => setForm({ ...form, matAdvPercent: e.target.value })}
+              className="input"
+              style={{ marginTop: "0.25rem" }}
+            />
+          </label>
+        </div>
+
+        <label style={{ display: "block", marginTop: "0.75rem" }}>
+          <span className="field-label">Opening Mat. Advance (₹)</span>
+          <input
+            type="number"
+            value={form.openingMatAdvance}
+            onChange={(e) => setForm({ ...form, openingMatAdvance: e.target.value })}
+            className="input"
+            style={{ marginTop: "0.25rem" }}
+          />
+        </label>
+
+        <div className="modal-actions">
+          <button type="button" onClick={onCancel} className="btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" disabled={saving} className="btn-primary">
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function ItemModal({ mode, data, onCancel, onSave }) {
   const [form, setForm] = useState({
     srNo: data.srNo ?? "",
@@ -472,7 +725,6 @@ function ItemModal({ mode, data, onCancel, onSave }) {
             autoComplete="off"
             value={form.srNo}
             onChange={(e) => setForm({ ...form, srNo: e.target.value })}
-            placeholder="e.g. 1"
             className="input"
             style={{ marginTop: "0.25rem" }}
           />
@@ -512,7 +764,7 @@ function ItemModal({ mode, data, onCancel, onSave }) {
   );
 }
 
-function parseBulkItemsText(text, startingSrNo) {
+export function parseBulkItemsText(text, startingSrNo) {
   const lines = text
     .split("\n")
     .map((l) => l.replace(/\r/g, "").trim())
@@ -592,7 +844,6 @@ function BulkAddItemsModal({ existingCount, onCancel, onSave }) {
           autoFocus
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={"30\tBridge Part -3\t7798.6\n40\tBridge Part -4\t12796.9\n50\tClearing Rake\t18109.96"}
           rows={8}
           className="input bulk-textarea"
         />
@@ -719,7 +970,6 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
               autoComplete="off"
               value={invoiceDateText}
               onChange={(e) => handleDateChange(e.target.value)}
-              placeholder="28-03-26"
               maxLength={8}
               className="input"
               style={{ marginTop: "0.25rem" }}
@@ -750,7 +1000,6 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
                     setAllocations({ ...allocations, [it.id]: e.target.value })
                   }
                   className="item-list-input"
-                  placeholder="0"
                 />
               </div>
             ))}
@@ -774,7 +1023,6 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
                 type="number"
                 value={matAdvanceOverride}
                 onChange={(e) => setMatAdvanceOverride(e.target.value)}
-                placeholder="auto"
                 className="input"
                 style={{ marginTop: "0.25rem" }}
               />
@@ -785,7 +1033,6 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
                 type="number"
                 value={tdsOverride}
                 onChange={(e) => setTdsOverride(e.target.value)}
-                placeholder="auto"
                 className="input"
                 style={{ marginTop: "0.25rem" }}
               />
@@ -796,7 +1043,6 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
                 type="number"
                 value={roundOffOverride}
                 onChange={(e) => setRoundOffOverride(e.target.value)}
-                placeholder="auto"
                 className="input"
                 style={{ marginTop: "0.25rem" }}
               />

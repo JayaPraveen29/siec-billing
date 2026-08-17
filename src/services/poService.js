@@ -50,11 +50,13 @@ export async function addItem(poId, data) {
 export async function addItemsBulk(poId, itemsArray) {
   const batch = writeBatch(db);
   const itemsCol = collection(db, "poSheets", poId, "items");
-  itemsArray.forEach((data) => {
+  const created = itemsArray.map((data) => {
     const ref = doc(itemsCol);
     batch.set(ref, data);
+    return { id: ref.id, ...data };
   });
-  return batch.commit();
+  await batch.commit();
+  return created;
 }
 
 export async function updateItem(poId, itemId, data) {

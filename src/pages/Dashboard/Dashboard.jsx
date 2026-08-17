@@ -17,6 +17,7 @@ import "./Dashboard.css";
 
 const emptyForm = {
   poNumber: "",
+  unitRate: "",
   gstPercent: "18",
   tdsPercent: "0.1",
   matAdvPercent: "20",
@@ -66,6 +67,7 @@ export default function Dashboard() {
       await createPOSheet({
         code: form.poNumber.trim(),
         poNumber: form.poNumber.trim(),
+        unitRate: Number(form.unitRate) || 0,
         gstPercent: Number(form.gstPercent) || 0,
         tdsPercent: Number(form.tdsPercent) || 0,
         matAdvPercent: Number(form.matAdvPercent) || 0,
@@ -151,6 +153,7 @@ export default function Dashboard() {
               </div>
               {po.title && <div className="po-card-desc">{po.title}</div>}
               <div className="po-card-meta">
+                <span>Rate ₹{fmtNum(po.unitRate, 2)}/kg</span>
                 <span>GST {po.gstPercent}%</span>
                 <span>Mat. Adv. {po.matAdvPercent}%</span>
               </div>
@@ -174,16 +177,28 @@ export default function Dashboard() {
               />
             </Field>
 
-            <Field label="Mat. Adv.:">
-              <input
-                type="number"
-                value={form.openingMatAdvance}
-                onChange={(e) =>
-                  setForm({ ...form, openingMatAdvance: e.target.value })
-                }
-                className="input"
-              />
-            </Field>
+            <div className="form-row-2">
+              <Field label="Unit Rate (₹/kg)">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={form.unitRate}
+                  onChange={(e) => setForm({ ...form, unitRate: e.target.value })}
+                  placeholder="120.95"
+                  className="input"
+                />
+              </Field>
+              <Field label="Mat. Adv.:">
+                <input
+                  type="number"
+                  value={form.openingMatAdvance}
+                  onChange={(e) =>
+                    setForm({ ...form, openingMatAdvance: e.target.value })
+                  }
+                  className="input"
+                />
+              </Field>
+            </div>
 
             <div className="form-row-3">
               <Field label="GST %">

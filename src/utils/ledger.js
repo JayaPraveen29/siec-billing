@@ -31,8 +31,8 @@ export function computePOLedger(po, items, invoices) {
   const openingMatAdvance = num(po.openingMatAdvance);
 
   const sortedInvoices = [...invoices].sort((a, b) => {
-    const da = a.invoiceDate ? new Date(a.invoiceDate).getTime() : 0;
-    const db = b.invoiceDate ? new Date(b.invoiceDate).getTime() : 0;
+    const da = a.invoiceDate ? new Date(a.invoiceDate).getTime() : Infinity;
+    const db = b.invoiceDate ? new Date(b.invoiceDate).getTime() : Infinity;
     if (da !== db) return da - db;
     return num(a.invoiceNo) - num(b.invoiceNo);
   });
@@ -42,7 +42,13 @@ export function computePOLedger(po, items, invoices) {
   const invoiceRows = sortedInvoices.map((inv) => {
     const allocations = inv.allocations || {};
     const qty = Object.values(allocations).reduce((s, v) => s + num(v), 0);
-    const basic = qty * unitRate;
+    // Some invoices don't follow the PO's default unit rate — allow a
+    // per-invoice override, falling back to the sheet's unitRate.
+    const effectiveUnitRate =
+      inv.unitRateOverride !== undefined && inv.unitRateOverride !== ""
+        ? num(inv.unitRateOverride)
+        : unitRate;
+    const basic = qty * effectiveUnitRate;
     const gst = basic * (gstPercent / 100);
     const totalInvoiceValue = Math.round(basic + gst);
     const roundOff =
@@ -78,6 +84,7 @@ export function computePOLedger(po, items, invoices) {
     return {
       ...inv,
       qty,
+      unitRate: effectiveUnitRate,
       basic,
       gst,
       roundOff,
@@ -119,7 +126,14 @@ export function computePOLedger(po, items, invoices) {
     tds: invoiceRows.reduce((s, r) => s + r.tds, 0),
     netReceivable: invoiceRows.reduce((s, r) => s + r.netReceivable, 0),
     paymentReceived: invoiceRows.reduce((s, r) => s + r.paymentReceived, 0),
-    balanceToReceive: invoiceRows.reduce((s, r) => s + r.balanceToReceive, 0),
+    // "Balance to Receive" is a running/cumulative figure (like the material
+    // advance balance), not a per-invoice additive line item. Summing every
+    // invoice's balanceToReceive double-counts settled invoices and advance
+    // -only entries. The true outstanding amount is simply the balance left
+    // on the most recent invoice.
+    balanceToReceive: invoiceRows.length
+      ? invoiceRows[invoiceRows.length - 1].balanceToReceive
+      : 0,
   };
 
   return {

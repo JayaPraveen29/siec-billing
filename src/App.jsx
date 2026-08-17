@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard/Dashboard";
+import POCreate from "./pages/POCreate/POCreate";
 import POSheet from "./pages/PO/POSheet";
 import ABSReport from "./pages/ABSReport/ABSReport";
 import "./App.css";
@@ -12,6 +13,7 @@ export default function App() {
       <main className="app-main">
         <Routes>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/po/new" element={<POCreate />} />
           <Route path="/po/:id" element={<POSheet />} />
           <Route path="/abs" element={<ABSReport />} />
           <Route path="*" element={<Navigate to="/" replace />} />

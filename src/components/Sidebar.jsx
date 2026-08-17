@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutGrid, FileSpreadsheet } from "lucide-react";
+import { LayoutGrid, FileSpreadsheet, FilePlus2 } from "lucide-react";
 import "./Sidebar.css";
 
 export default function Sidebar() {
@@ -23,6 +23,13 @@ export default function Sidebar() {
         >
           <LayoutGrid size={17} />
           PO Sheets
+        </NavLink>
+        <NavLink
+          to="/po/new"
+          className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`}
+        >
+          <FilePlus2 size={17} />
+          PO Creation
         </NavLink>
         <NavLink
           to="/abs"
