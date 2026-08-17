@@ -48,6 +48,18 @@ function isoToDdmmyy(iso) {
   return `${dd}-${mm}-${yy}`;
 }
 
+// Auto-insert dashes as the user types digits: 280326 -> 28-03-26.
+// Shared by the Add/Edit Invoice date field and the inline Payment Date editor.
+function formatDdmmyyInput(raw) {
+  const digits = raw.replace(/[^0-9]/g, "").slice(0, 6);
+  if (digits.length > 4) {
+    return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
+  } else if (digits.length > 2) {
+    return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  }
+  return digits;
+}
+
 export default function POSheet() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -97,6 +109,119 @@ export default function POSheet() {
       return next;
     });
     setEditingUnitRateId(null);
+  }
+
+  // Draft values for the inline-editable TDS cells — same double-click
+  // pattern as Unit Rate above (some invoices need a manual TDS override).
+  const [tdsDrafts, setTdsDrafts] = useState({});
+  const [editingTdsId, setEditingTdsId] = useState(null);
+
+  function startEditingTds(inv) {
+    setTdsDrafts((prev) => ({
+      ...prev,
+      [inv.id]: inv.tdsOverride ?? "",
+    }));
+    setEditingTdsId(inv.id);
+  }
+
+  function cancelEditingTds(invoiceId) {
+    setTdsDrafts((prev) => {
+      const next = { ...prev };
+      delete next[invoiceId];
+      return next;
+    });
+    setEditingTdsId(null);
+  }
+
+  async function handleTdsOverrideChange(invoiceId, rawValue) {
+    const value = rawValue.trim();
+    await updateInvoice(id, invoiceId, {
+      tdsOverride: value === "" ? "" : Number(value),
+    });
+    setTdsDrafts((prev) => {
+      const next = { ...prev };
+      delete next[invoiceId];
+      return next;
+    });
+    setEditingTdsId(null);
+  }
+
+  // Draft values for the inline-editable Payment Date cells (DD-MM-YY text,
+  // same format/validation as the Add Invoice date field).
+  const [paymentDateDrafts, setPaymentDateDrafts] = useState({});
+  const [editingPaymentDateId, setEditingPaymentDateId] = useState(null);
+
+  function startEditingPaymentDate(inv) {
+    setPaymentDateDrafts((prev) => ({
+      ...prev,
+      [inv.id]: isoToDdmmyy(inv.paymentDate) || "",
+    }));
+    setEditingPaymentDateId(inv.id);
+  }
+
+  function cancelEditingPaymentDate(invoiceId) {
+    setPaymentDateDrafts((prev) => {
+      const next = { ...prev };
+      delete next[invoiceId];
+      return next;
+    });
+    setEditingPaymentDateId(null);
+  }
+
+  function handlePaymentDateDraftChange(invoiceId, raw) {
+    setPaymentDateDrafts((prev) => ({
+      ...prev,
+      [invoiceId]: formatDdmmyyInput(raw),
+    }));
+  }
+
+  async function handlePaymentDateSave(invoiceId) {
+    const text = (paymentDateDrafts[invoiceId] || "").trim();
+    const iso = text === "" ? "" : ddmmyyToIso(text);
+    // Invalid partial date typed in - keep the field open so the user can fix it.
+    if (text !== "" && !iso) return;
+    await updateInvoice(id, invoiceId, { paymentDate: iso });
+    setPaymentDateDrafts((prev) => {
+      const next = { ...prev };
+      delete next[invoiceId];
+      return next;
+    });
+    setEditingPaymentDateId(null);
+  }
+
+  // Draft values for the inline-editable Payment Amount cells — same
+  // double-click pattern as Unit Rate above.
+  const [paymentAmountDrafts, setPaymentAmountDrafts] = useState({});
+  const [editingPaymentAmountId, setEditingPaymentAmountId] = useState(null);
+
+  function startEditingPaymentAmount(inv) {
+    setPaymentAmountDrafts((prev) => ({
+      ...prev,
+      [inv.id]: inv.paymentReceived ?? "",
+    }));
+    setEditingPaymentAmountId(inv.id);
+  }
+
+  function cancelEditingPaymentAmount(invoiceId) {
+    setPaymentAmountDrafts((prev) => {
+      const next = { ...prev };
+      delete next[invoiceId];
+      return next;
+    });
+    setEditingPaymentAmountId(null);
+  }
+
+  async function handlePaymentAmountChange(invoiceId, rawValue) {
+    const value = rawValue.trim();
+    await updateInvoice(id, invoiceId, {
+      paymentReceived: value === "" ? "" : Number(value),
+    });
+    setPaymentAmountDrafts((prev) => {
+      const next = { ...prev };
+      delete next[invoiceId];
+      return next;
+    });
+    setEditingPaymentAmountId(null);
   }
 
   // Excel import: all orchestration logic lives in usePOImport (hooks/usePOImport.js),
@@ -165,9 +290,10 @@ export default function POSheet() {
       // amount that's meaningful to add up. Their "Total" column should show
       // the latest running value, not sum every invoice's snapshot of it.
       { no: 9, label: "Bala. Mat. Advance", getVal: (r) => r?.matAdvanceBalance, totalMode: "last" },
-      { no: 10, label: "Payment received", getVal: (r) => r?.paymentReceived },
+      { no: 10, label: "Payment Date", getVal: () => null, isDate: true },
+      { no: 11, label: "Payment Amount", getVal: (r) => r?.paymentReceived },
       {
-        no: 11,
+        no: 12,
         label: "Bal to be received",
         getVal: (r) => r?.balanceToReceive,
         accentFn: (v) => (v > 0.5 ? "text-warn" : "text-ok"),
@@ -431,7 +557,7 @@ export default function POSheet() {
                 </tr>
                 {SUMMARY_ROW_DEFS.map((def) => {
                   let rowTotal = null;
-                  if (def.no !== 1) {
+                  if (def.no !== 1 && !def.isDate) {
                     if (def.totalMode === "last") {
                       const lastInv =
                         sortedInvoicesForMatrix[sortedInvoicesForMatrix.length - 1];
@@ -455,6 +581,8 @@ export default function POSheet() {
                       >
                         {def.no === 1
                           ? fmtNum(po.unitRate, 2)
+                          : def.isDate
+                          ? "-"
                           : rowTotal
                           ? fmtNum(rowTotal, 0)
                           : "-"}
@@ -506,6 +634,146 @@ export default function POSheet() {
                             </td>
                           );
                         }
+
+                        if (def.no === 7) {
+                          // TDS row - same double-click-to-edit pattern as Unit Rate.
+                          const r = invoiceRowById[inv.id];
+                          const effectiveTds = r?.tds;
+
+                          if (editingTdsId === inv.id) {
+                            const draft = tdsDrafts[inv.id];
+                            const value = draft !== undefined ? draft : "";
+                            return (
+                              <td key={inv.id} className="text-right tabular">
+                                <input
+                                  autoFocus
+                                  type="number"
+                                  step="0.01"
+                                  value={value}
+                                  onChange={(e) =>
+                                    setTdsDrafts((prev) => ({
+                                      ...prev,
+                                      [inv.id]: e.target.value,
+                                    }))
+                                  }
+                                  onFocus={(e) => e.target.select()}
+                                  onBlur={(e) =>
+                                    handleTdsOverrideChange(inv.id, e.target.value)
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") e.target.blur();
+                                    if (e.key === "Escape") cancelEditingTds(inv.id);
+                                  }}
+                                  className="input po-unit-rate-input"
+                                  title="Leave blank to use the computed TDS"
+                                />
+                              </td>
+                            );
+                          }
+
+                          return (
+                            <td
+                              key={inv.id}
+                              className="text-right tabular po-unit-rate-display"
+                              onDoubleClick={() => startEditingTds(inv)}
+                              title="Double-click to edit"
+                            >
+                              {effectiveTds && effectiveTds !== 0 ? fmtNum(effectiveTds, 0) : "-"}
+                            </td>
+                          );
+                        }
+
+                        if (def.no === 10) {
+                          // Payment Date row - double-click to edit, DD-MM-YY text
+                          // like the Add Invoice date field.
+                          if (editingPaymentDateId === inv.id) {
+                            const draft = paymentDateDrafts[inv.id];
+                            const value = draft !== undefined ? draft : "";
+                            return (
+                              <td key={inv.id} className="text-right tabular">
+                                <input
+                                  autoFocus
+                                  type="text"
+                                  inputMode="numeric"
+                                  autoComplete="off"
+                                  maxLength={8}
+                                  placeholder="DD-MM-YY"
+                                  value={value}
+                                  onChange={(e) =>
+                                    handlePaymentDateDraftChange(inv.id, e.target.value)
+                                  }
+                                  onFocus={(e) => e.target.select()}
+                                  onBlur={() => handlePaymentDateSave(inv.id)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") e.target.blur();
+                                    if (e.key === "Escape") cancelEditingPaymentDate(inv.id);
+                                  }}
+                                  className="input po-unit-rate-input"
+                                  title="Leave blank to clear the payment date"
+                                />
+                              </td>
+                            );
+                          }
+
+                          return (
+                            <td
+                              key={inv.id}
+                              className="text-right tabular po-unit-rate-display"
+                              onDoubleClick={() => startEditingPaymentDate(inv)}
+                              title="Double-click to edit"
+                            >
+                              {isoToDdmmyy(inv.paymentDate) || "-"}
+                            </td>
+                          );
+                        }
+
+                        if (def.no === 11) {
+                          // Payment Amount row - same double-click-to-edit pattern as Unit Rate.
+                          if (editingPaymentAmountId === inv.id) {
+                            const draft = paymentAmountDrafts[inv.id];
+                            const value = draft !== undefined ? draft : "";
+                            return (
+                              <td key={inv.id} className="text-right tabular">
+                                <input
+                                  autoFocus
+                                  type="number"
+                                  step="0.01"
+                                  value={value}
+                                  onChange={(e) =>
+                                    setPaymentAmountDrafts((prev) => ({
+                                      ...prev,
+                                      [inv.id]: e.target.value,
+                                    }))
+                                  }
+                                  onFocus={(e) => e.target.select()}
+                                  onBlur={(e) =>
+                                    handlePaymentAmountChange(inv.id, e.target.value)
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") e.target.blur();
+                                    if (e.key === "Escape") cancelEditingPaymentAmount(inv.id);
+                                  }}
+                                  className="input po-unit-rate-input"
+                                  title="Amount received against this invoice"
+                                />
+                              </td>
+                            );
+                          }
+
+                          const r = invoiceRowById[inv.id];
+                          const paid = r?.paymentReceived;
+                          return (
+                            <td
+                              key={inv.id}
+                              className="text-right tabular po-unit-rate-display"
+                              onDoubleClick={() => startEditingPaymentAmount(inv)}
+                              title="Double-click to edit"
+                            >
+                              {paid && paid !== 0 ? fmtNum(paid, 0) : "-"}
+                            </td>
+                          );
+                        }
+
                         const r = invoiceRowById[inv.id];
                         const raw = def.getVal(r);
                         const display =
@@ -524,7 +792,7 @@ export default function POSheet() {
                         );
                       })}
                       <td className="text-right tabular" style={def.bold ? { fontWeight: 600 } : undefined}>
-                        {def.no === 1 || !rowTotal ? "-" : fmtNum(rowTotal, 0)}
+                        {def.no === 1 || def.isDate || !rowTotal ? "-" : fmtNum(rowTotal, 0)}
                       </td>
                       <td></td>
                     </tr>
@@ -910,15 +1178,7 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
   );
 
   function handleDateChange(raw) {
-    // Auto-insert dashes as the user types digits: 280326 -> 28-03-26
-    let digits = raw.replace(/[^0-9]/g, "").slice(0, 6);
-    let formatted = digits;
-    if (digits.length > 4) {
-      formatted = `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
-    } else if (digits.length > 2) {
-      formatted = `${digits.slice(0, 2)}-${digits.slice(2)}`;
-    }
-    setInvoiceDateText(formatted);
+    setInvoiceDateText(formatDdmmyyInput(raw));
     setInvoiceDateError("");
   }
 
@@ -968,6 +1228,7 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
               type="text"
               inputMode="numeric"
               autoComplete="off"
+              placeholder="DD-MM-YY"
               value={invoiceDateText}
               onChange={(e) => handleDateChange(e.target.value)}
               maxLength={8}
