@@ -27,6 +27,7 @@ import "./POSheet.css";
 const emptyItem = { srNo: "", description: "", weightKg: "" };
 
 // --- DD-MM-YY <-> ISO (yyyy-mm-dd) helpers for manual date entry ---
+// (Still used by the Add/Edit Invoice date field, which stays free-text.)
 function ddmmyyToIso(str) {
   const m = /^(\d{2})-(\d{2})-(\d{2})$/.exec((str || "").trim());
   if (!m) return null;
@@ -49,7 +50,7 @@ function isoToDdmmyy(iso) {
 }
 
 // Auto-insert dashes as the user types digits: 280326 -> 28-03-26.
-// Shared by the Add/Edit Invoice date field and the inline Payment Date editor.
+// Used by the Add/Edit Invoice date field.
 function formatDdmmyyInput(raw) {
   const digits = raw.replace(/[^0-9]/g, "").slice(0, 6);
   if (digits.length > 4) {
@@ -146,15 +147,16 @@ export default function POSheet() {
     setEditingTdsId(null);
   }
 
-  // Draft values for the inline-editable Payment Date cells (DD-MM-YY text,
-  // same format/validation as the Add Invoice date field).
+  // Draft values for the inline-editable Payment Date cells. Double-click a
+  // cell to open a native <input type="date"> date-picker; the draft is
+  // stored as an ISO (yyyy-mm-dd) string, same format the input works with.
   const [paymentDateDrafts, setPaymentDateDrafts] = useState({});
   const [editingPaymentDateId, setEditingPaymentDateId] = useState(null);
 
   function startEditingPaymentDate(inv) {
     setPaymentDateDrafts((prev) => ({
       ...prev,
-      [inv.id]: isoToDdmmyy(inv.paymentDate) || "",
+      [inv.id]: inv.paymentDate || "",
     }));
     setEditingPaymentDateId(inv.id);
   }
@@ -168,18 +170,15 @@ export default function POSheet() {
     setEditingPaymentDateId(null);
   }
 
-  function handlePaymentDateDraftChange(invoiceId, raw) {
+  function handlePaymentDateDraftChange(invoiceId, isoValue) {
     setPaymentDateDrafts((prev) => ({
       ...prev,
-      [invoiceId]: formatDdmmyyInput(raw),
+      [invoiceId]: isoValue,
     }));
   }
 
   async function handlePaymentDateSave(invoiceId) {
-    const text = (paymentDateDrafts[invoiceId] || "").trim();
-    const iso = text === "" ? "" : ddmmyyToIso(text);
-    // Invalid partial date typed in - keep the field open so the user can fix it.
-    if (text !== "" && !iso) return;
+    const iso = paymentDateDrafts[invoiceId] || "";
     await updateInvoice(id, invoiceId, { paymentDate: iso });
     setPaymentDateDrafts((prev) => {
       const next = { ...prev };
@@ -190,7 +189,7 @@ export default function POSheet() {
   }
 
   // Draft values for the inline-editable Payment Amount cells — same
-  // double-click pattern as Unit Rate above.
+  // double-click pattern as Unit Rate/TDS above.
   const [paymentAmountDrafts, setPaymentAmountDrafts] = useState({});
   const [editingPaymentAmountId, setEditingPaymentAmountId] = useState(null);
 
@@ -271,10 +270,14 @@ export default function POSheet() {
   const SUMMARY_ROW_DEFS = useMemo(() => {
     if (!po) return [];
     return [
-      { no: 1, label: "Unit Rate", getVal: (r) => (r ? r.unitRate : null) },
+      { no: 1, label: "Unit Rate", getVal: (r) => (r ? r.unitRate : null), decimals: 2 },
       { no: 2, label: "Basic Value", getVal: (r) => r?.basic },
       { no: 3, label: `GST @ ${po.gstPercent}%`, getVal: (r) => r?.gst },
-      { no: 4, label: "Round Off", getVal: (r) => r?.roundOff },
+      // Round Off is the fractional-rupee residual left over when Basic+GST
+      // gets rounded to a whole Total Invoice Value (see ledger.js) — it's
+      // normally well under ₹1, so it needs 2 decimal places or it displays
+      // as a meaningless "0"/"-0" for every invoice.
+      { no: 4, label: "Round Off", getVal: (r) => r?.roundOff, decimals: 2 },
       { no: 5, label: "Total Invoice Value", getVal: (r) => r?.totalInvoiceValue, bold: true },
       { no: 6, label: `Material Advance @ ${po.matAdvPercent}%`, getVal: (r) => r?.matAdvance },
       { no: 7, label: `TDS @ ${po.tdsPercent}%`, getVal: (r) => r?.tds },
@@ -584,7 +587,7 @@ export default function POSheet() {
                           : def.isDate
                           ? "-"
                           : rowTotal
-                          ? fmtNum(rowTotal, 0)
+                          ? fmtNum(rowTotal, def.decimals ?? 0)
                           : "-"}
                       </td>
                       {sortedInvoicesForMatrix.map((inv) => {
@@ -684,8 +687,9 @@ export default function POSheet() {
                         }
 
                         if (def.no === 10) {
-                          // Payment Date row - double-click to edit, DD-MM-YY text
-                          // like the Add Invoice date field.
+                          // Payment Date row - double-click opens a native date-picker
+                          // input (type="date"), same interaction pattern as Unit
+                          // Rate/TDS but with a calendar picker instead of free text.
                           if (editingPaymentDateId === inv.id) {
                             const draft = paymentDateDrafts[inv.id];
                             const value = draft !== undefined ? draft : "";
@@ -693,23 +697,18 @@ export default function POSheet() {
                               <td key={inv.id} className="text-right tabular">
                                 <input
                                   autoFocus
-                                  type="text"
-                                  inputMode="numeric"
-                                  autoComplete="off"
-                                  maxLength={8}
-                                  placeholder="DD-MM-YY"
+                                  type="date"
                                   value={value}
                                   onChange={(e) =>
                                     handlePaymentDateDraftChange(inv.id, e.target.value)
                                   }
-                                  onFocus={(e) => e.target.select()}
                                   onBlur={() => handlePaymentDateSave(inv.id)}
                                   onKeyDown={(e) => {
                                     if (e.key === "Enter") e.target.blur();
                                     if (e.key === "Escape") cancelEditingPaymentDate(inv.id);
                                   }}
-                                  className="input po-unit-rate-input"
-                                  title="Leave blank to clear the payment date"
+                                  className="input po-unit-rate-input po-date-input"
+                                  title="Pick the payment date, or clear it"
                                 />
                               </td>
                             );
@@ -720,15 +719,15 @@ export default function POSheet() {
                               key={inv.id}
                               className="text-right tabular po-unit-rate-display"
                               onDoubleClick={() => startEditingPaymentDate(inv)}
-                              title="Double-click to edit"
+                              title="Double-click to pick a date"
                             >
-                              {isoToDdmmyy(inv.paymentDate) || "-"}
+                              {inv.paymentDate ? fmtDate(inv.paymentDate) : "-"}
                             </td>
                           );
                         }
 
                         if (def.no === 11) {
-                          // Payment Amount row - same double-click-to-edit pattern as Unit Rate.
+                          // Payment Amount row - same double-click-to-edit pattern as Unit Rate/TDS.
                           if (editingPaymentAmountId === inv.id) {
                             const draft = paymentAmountDrafts[inv.id];
                             const value = draft !== undefined ? draft : "";
@@ -778,7 +777,7 @@ export default function POSheet() {
                         const raw = def.getVal(r);
                         const display =
                           raw && raw !== 0
-                            ? fmtNum(raw, def.no === 1 ? 2 : 0)
+                            ? fmtNum(raw, def.decimals ?? 0)
                             : "-";
                         const accentClass = def.accentFn ? def.accentFn(raw || 0) : def.accentClass || "";
                         return (
@@ -792,7 +791,7 @@ export default function POSheet() {
                         );
                       })}
                       <td className="text-right tabular" style={def.bold ? { fontWeight: 600 } : undefined}>
-                        {def.no === 1 || def.isDate || !rowTotal ? "-" : fmtNum(rowTotal, 0)}
+                        {def.no === 1 || def.isDate || !rowTotal ? "-" : fmtNum(rowTotal, def.decimals ?? 0)}
                       </td>
                       <td></td>
                     </tr>

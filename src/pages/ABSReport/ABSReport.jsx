@@ -75,7 +75,7 @@ export default function ABSReport() {
                 <td className="text-right tabular">{fmtNum(report.grandTotal.gst, 0)}</td>
                 <td className="text-right tabular">{fmtNum(report.grandTotal.tds, 0)}</td>
                 <td className="text-right tabular">
-                  {fmtNum(report.grandTotal.roundOff, 0)}
+                  {fmtNum(report.grandTotal.roundOff, 2)}
                 </td>
                 <td className="text-right tabular">
                   {fmtINR(report.grandTotal.grossValue)}
@@ -121,7 +121,7 @@ function GroupRows({ group }) {
           <td className="text-right tabular">{fmtNum(r.basic, 0)}</td>
           <td className="text-right tabular">{fmtNum(r.gst, 0)}</td>
           <td className="text-right tabular">{fmtNum(r.tds, 0)}</td>
-          <td className="text-right tabular">{fmtNum(r.roundOff, 0)}</td>
+          <td className="text-right tabular">{fmtNum(r.roundOff, 2)}</td>
           <td className="text-right tabular" style={{ fontWeight: 600 }}>
             {fmtNum(r.grossValue, 2)}
           </td>
@@ -141,7 +141,7 @@ function GroupRows({ group }) {
         <td className="text-right tabular">{fmtNum(group.subtotal.basic, 0)}</td>
         <td className="text-right tabular">{fmtNum(group.subtotal.gst, 0)}</td>
         <td className="text-right tabular">{fmtNum(group.subtotal.tds, 0)}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.roundOff, 0)}</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.roundOff, 2)}</td>
         <td className="text-right tabular">{fmtNum(group.subtotal.grossValue, 2)}</td>
         <td className="text-right tabular">{fmtNum(group.subtotal.matAdvance, 0)}</td>
         <td className="text-right tabular">{fmtNum(group.subtotal.netReceivable, 0)}</td>

@@ -176,6 +176,19 @@
   color: var(--color-text-muted);
 }
 
+/* Payment Date cell: uses a native <input type="date"> which needs a bit
+   more width than the numeric override inputs to show the picker icon. */
+.po-date-input {
+  width: 8.5rem;
+  color-scheme: dark;
+}
+
+@media (min-width: 640px) {
+  .po-date-input {
+    width: 9rem;
+  }
+}
+
 .po-unit-rate-display {
   cursor: pointer;
   border-bottom: 1px dashed transparent;
