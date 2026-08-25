@@ -5,7 +5,7 @@ import POCreate from "./pages/POCreate/POCreate";
 import POSheet from "./pages/PO/POSheet";
 import ABSReport from "./pages/ABSReport/ABSReport";
 import POWiseReport from "./pages/POWiseReport/POWiseReport";
-import DateWiseReport from "./pages/DateWiseReport/DateWiseReport";
+import DateWiseReport from "./pages/DateWiseReport/Datewisereport";
 import "./App.css";
 
 export default function App() {
