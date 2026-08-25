@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Plus, Pencil, Trash2, ChevronDown, ClipboardPaste, Settings } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, ChevronDown, ClipboardPaste, Settings, FileSpreadsheet, FileText } from "lucide-react";
 import {
   addInvoice,
   addItem,
@@ -16,6 +16,7 @@ import {
 } from "../../services/poService";
 import { computePOLedger } from "../../utils/ledger";
 import { fmtINR, fmtNum, fmtDate, toInputDate } from "../../utils/format";
+import { exportPOSheetToExcel, exportPOSheetToPDF } from "../../utils/poExport";
 import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import ConfirmDialog from "../../components/ConfirmDialog";
@@ -74,6 +75,7 @@ export default function POSheet() {
   const [invoiceModal, setInvoiceModal] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null); // {type, id}
   const [settingsModal, setSettingsModal] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   // Draft values for the inline-editable Unit Rate cells (one per invoice
   // column) — some invoices don't follow the PO's default unit rate.
@@ -271,8 +273,8 @@ export default function POSheet() {
     if (!po) return [];
     return [
       { no: 1, label: "Unit Rate", getVal: (r) => (r ? r.unitRate : null), decimals: 2 },
-      { no: 2, label: "Basic Value", getVal: (r) => r?.basic },
-      { no: 3, label: `GST @ ${po.gstPercent}%`, getVal: (r) => r?.gst },
+      { no: 2, label: "Basic Value", getVal: (r) => r?.basic, decimals: 2 },
+      { no: 3, label: `GST @ ${po.gstPercent}%`, getVal: (r) => r?.gst, decimals: 2 },
       // Round Off is the fractional-rupee residual left over when Basic+GST
       // gets rounded to a whole Total Invoice Value (see ledger.js) — it's
       // normally well under ₹1, so it needs 2 decimal places or it displays
@@ -348,6 +350,21 @@ export default function POSheet() {
     setSettingsModal(false);
   }
 
+  function handleExportExcel() {
+    if (!po || !ledger) return;
+    exportPOSheetToExcel(po, ledger);
+  }
+
+  async function handleExportPdf() {
+    if (!po || !ledger) return;
+    setExportingPdf(true);
+    try {
+      await exportPOSheetToPDF(po, ledger);
+    } finally {
+      setExportingPdf(false);
+    }
+  }
+
   return (
     <div className="po-page">
       <button onClick={() => navigate("/")} className="back-link">
@@ -364,13 +381,33 @@ export default function POSheet() {
             { label: "GST", value: `${po.gstPercent}%` },
           ]}
         />
-        <button
-          onClick={() => setSettingsModal(true)}
-          className="btn-outline po-settings-btn"
-          title="Edit Unit Rate, GST, TDS, Material Advance %"
-        >
-          <Settings size={15} /> Edit Rate & Settings
-        </button>
+        <div className="po-header-actions">
+          <button
+            onClick={handleExportExcel}
+            className="btn-outline po-export-btn"
+            disabled={!ledger}
+            title="Export to Excel"
+          >
+            <FileSpreadsheet size={15} />
+            Excel
+          </button>
+          <button
+            onClick={handleExportPdf}
+            className="btn-outline po-export-btn"
+            disabled={!ledger || exportingPdf}
+            title="Export to PDF"
+          >
+            <FileText size={15} className={exportingPdf ? "spinning" : ""} />
+            PDF
+          </button>
+          <button
+            onClick={() => setSettingsModal(true)}
+            className="btn-outline po-settings-btn"
+            title="Edit Unit Rate, GST, TDS, Material Advance %"
+          >
+            <Settings size={15} /> Edit Rate & Settings
+          </button>
+        </div>
       </div>
       {po.title && <p className="po-title-desc">{po.title}</p>}
 

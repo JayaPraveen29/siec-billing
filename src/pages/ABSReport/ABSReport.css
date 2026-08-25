@@ -12,7 +12,16 @@
   flex-wrap: wrap;
 }
 
-.abs-refresh {
+.abs-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.abs-refresh,
+.abs-export-btn {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -21,14 +30,22 @@
   border-radius: var(--radius-sm);
   font-size: 0.875rem;
   flex-shrink: 0;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, opacity 0.15s ease;
+  background: transparent;
 }
 
-.abs-refresh:hover {
+.abs-refresh:hover,
+.abs-export-btn:hover:not(:disabled) {
   border-color: var(--color-rivet);
 }
 
-.abs-refresh .spinning {
+.abs-export-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.abs-refresh .spinning,
+.abs-export-btn .spinning {
   animation: abs-spin 0.8s linear infinite;
 }
 

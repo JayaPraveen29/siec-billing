@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, FileSpreadsheet, FileText } from "lucide-react";
 import { fetchAllPOData } from "../../services/poService";
 import { computeABSReport } from "../../utils/ledger";
 import { fmtINR, fmtNum, fmtDate } from "../../utils/format";
+import { exportABSReportToExcel, exportABSReportToPDF } from "../../utils/absExport";
 import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import "./ABSReport.css";
@@ -10,6 +11,7 @@ import "./ABSReport.css";
 export default function ABSReport() {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -22,6 +24,21 @@ export default function ABSReport() {
     load();
   }, []);
 
+  function handleExportExcel() {
+    if (!report) return;
+    exportABSReportToExcel(report);
+  }
+
+  async function handleExportPdf() {
+    if (!report) return;
+    setExportingPdf(true);
+    try {
+      await exportABSReportToPDF(report);
+    } finally {
+      setExportingPdf(false);
+    }
+  }
+
   return (
     <div className="abs-page">
       <div className="abs-header">
@@ -32,10 +49,30 @@ export default function ABSReport() {
             { label: "Generated", value: new Date().toLocaleDateString("en-GB") },
           ]}
         />
-        <button onClick={load} className="abs-refresh">
-          <RefreshCw size={15} className={loading ? "spinning" : ""} />
-          Refresh
-        </button>
+        <div className="abs-actions">
+          <button
+            onClick={handleExportExcel}
+            className="abs-export-btn"
+            disabled={!report || loading}
+            title="Export to Excel"
+          >
+            <FileSpreadsheet size={15} />
+            Excel
+          </button>
+          <button
+            onClick={handleExportPdf}
+            className="abs-export-btn"
+            disabled={!report || loading || exportingPdf}
+            title="Export to PDF"
+          >
+            <FileText size={15} className={exportingPdf ? "spinning" : ""} />
+            PDF
+          </button>
+          <button onClick={load} className="abs-refresh">
+            <RefreshCw size={15} className={loading ? "spinning" : ""} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {loading && <Loading label="Compiling abstract" />}

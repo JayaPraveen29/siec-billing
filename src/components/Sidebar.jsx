@@ -1,8 +1,25 @@
-import { NavLink } from "react-router-dom";
-import { LayoutGrid, FileSpreadsheet, FilePlus2 } from "lucide-react";
+import { useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import {
+  LayoutGrid,
+  FileSpreadsheet,
+  FilePlus2,
+  FileStack,
+  ClipboardList,
+  CalendarRange,
+  ChevronDown,
+} from "lucide-react";
 import "./Sidebar.css";
 
+const REPORT_PATHS = ["/abs", "/reports/po-wise", "/reports/date-wise"];
+
 export default function Sidebar() {
+  const location = useLocation();
+  const reportsActiveByRoute = REPORT_PATHS.some((p) =>
+    location.pathname.startsWith(p)
+  );
+  const [reportsOpen, setReportsOpen] = useState(reportsActiveByRoute);
+
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
@@ -31,13 +48,53 @@ export default function Sidebar() {
           <FilePlus2 size={17} />
           PO Creation
         </NavLink>
-        <NavLink
-          to="/abs"
-          className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`}
+        <button
+          type="button"
+          className={`sidebar-link sidebar-link-toggle${
+            reportsActiveByRoute ? " active" : ""
+          }`}
+          onClick={() => setReportsOpen((open) => !open)}
+          aria-expanded={reportsOpen}
         >
           <FileSpreadsheet size={17} />
-          ABS Report
-        </NavLink>
+          Reports
+          <ChevronDown
+            size={15}
+            className={`sidebar-chevron${reportsOpen ? " open" : ""}`}
+          />
+        </button>
+
+        {reportsOpen && (
+          <div className="sidebar-submenu">
+            <NavLink
+              to="/abs"
+              className={({ isActive }) =>
+                `sidebar-link sidebar-sublink${isActive ? " active" : ""}`
+              }
+            >
+              <ClipboardList size={15} />
+              ABS Report
+            </NavLink>
+            <NavLink
+              to="/reports/date-wise"
+              className={({ isActive }) =>
+                `sidebar-link sidebar-sublink${isActive ? " active" : ""}`
+              }
+            >
+              <CalendarRange size={15} />
+              Date Wise Report
+            </NavLink>
+            <NavLink
+              to="/reports/po-wise"
+              className={({ isActive }) =>
+                `sidebar-link sidebar-sublink${isActive ? " active" : ""}`
+              }
+            >
+              <FileStack size={15} />
+              PO Wise Report
+            </NavLink>
+          </div>
+        )}
       </nav>
     </aside>
   );

@@ -35,11 +35,33 @@
   flex-shrink: 0;
   white-space: nowrap;
 }
+.po-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.po-export-btn {
+  white-space: nowrap;
+}
+.po-export-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.po-export-btn .spinning {
+  animation: po-spin 0.8s linear infinite;
+}
+@keyframes po-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 @media (max-width: 640px) {
   .po-titleblock-row {
     flex-direction: column;
   }
-  .po-settings-btn {
+  .po-header-actions {
     align-self: flex-start;
   }
 }
