@@ -1,6 +1,6 @@
 import { CalendarRange } from "lucide-react";
 import TitleBlock from "../../components/TitleBlock";
-import "./DateWiseReport.css";
+import "./Datewisereport.css";
 
 export default function DateWiseReport() {
   return (
