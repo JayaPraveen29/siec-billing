@@ -1,36 +1,175 @@
 .powise-page {
   padding: 2rem;
-  max-width: 80rem;
+  max-width: 90rem;
   margin: 0 auto;
 }
 
-.powise-placeholder {
-  margin-top: 2rem;
-  border: 1px dashed var(--color-line);
-  border-radius: var(--radius-sm);
-  padding: 3rem 1.5rem;
+.powise-header {
   display: flex;
-  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.powise-actions {
+  display: flex;
   align-items: center;
-  text-align: center;
   gap: 0.5rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.powise-refresh,
+.powise-export-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--color-line);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  flex-shrink: 0;
+  transition: border-color 0.15s ease, opacity 0.15s ease;
+  background: transparent;
+}
+
+.powise-refresh:hover,
+.powise-export-btn:hover:not(:disabled) {
+  border-color: var(--color-rivet);
+}
+
+.powise-export-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.powise-refresh .spinning,
+.powise-export-btn .spinning {
+  animation: powise-spin 0.8s linear infinite;
+}
+
+@keyframes powise-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.powise-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.powise-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.6rem;
+  flex: 1 1 14rem;
+  min-width: 12rem;
+}
+
+.powise-search input {
+  background: transparent;
+  border: none;
+  color: var(--color-paper);
+  font-size: 0.875rem;
+  font-family: var(--font-body);
+  width: 100%;
+}
+
+.powise-search input:focus {
+  outline: none;
+}
+
+.powise-controls select {
+  background: var(--color-plate);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  color: var(--color-paper);
+  padding: 0.5rem 0.6rem;
+  font-size: 0.875rem;
+  font-family: var(--font-body);
+}
+
+.powise-controls select:focus {
+  outline: none;
+  border-color: var(--color-rivet);
+}
+
+.powise-table-wrap {
+  margin-top: 1.5rem;
+}
+
+.powise-row {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.powise-row:hover {
+  background: var(--color-plate2);
+}
+
+.powise-badge {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.powise-badge.qty-fully-billed,
+.powise-badge.pay-fully-paid {
+  color: var(--color-ok);
+  border-color: var(--color-ok);
+}
+
+.powise-badge.qty-in-progress,
+.powise-badge.pay-partially-paid {
+  color: var(--color-rivet2);
+  border-color: var(--color-rivet2);
+}
+
+.powise-badge.qty-not-started,
+.powise-badge.qty-no-items,
+.powise-badge.pay-unpaid,
+.powise-badge.pay-no-invoices {
+  color: var(--color-warn);
+  border-color: var(--color-warn);
+}
+
+.text-rivet {
+  color: var(--color-rivet);
+}
+.text-rivet2 {
+  color: var(--color-rivet2);
+}
+.text-warn {
+  color: var(--color-warn);
+}
+.text-ok {
+  color: var(--color-ok);
+}
+.text-muted {
   color: var(--color-muted);
 }
 
-.powise-placeholder-icon {
-  color: var(--color-rivet);
-  margin-bottom: 0.5rem;
-}
+@media (max-width: 640px) {
+  .powise-page {
+    padding: 1.25rem;
+  }
 
-.powise-placeholder-title {
-  font-family: var(--font-display);
-  font-size: 1.125rem;
-  color: var(--color-paper);
-  letter-spacing: 0.02em;
-}
-
-.powise-placeholder-text {
-  font-size: 0.875rem;
-  max-width: 28rem;
-  line-height: 1.5;
+  .powise-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
