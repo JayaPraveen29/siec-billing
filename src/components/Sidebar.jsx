@@ -7,11 +7,17 @@ import {
   FileStack,
   ClipboardList,
   CalendarRange,
+  Receipt,
   ChevronDown,
 } from "lucide-react";
 import "./Sidebar.css";
 
-const REPORT_PATHS = ["/abs", "/reports/po-wise", "/reports/date-wise"];
+const REPORT_PATHS = [
+  "/abs",
+  "/reports/po-wise",
+  "/reports/bill-wise",
+  "/reports/date-wise",
+];
 
 export default function Sidebar() {
   const location = useLocation();
@@ -92,6 +98,15 @@ export default function Sidebar() {
             >
               <FileStack size={15} />
               PO Wise Report
+            </NavLink>
+            <NavLink
+              to="/reports/bill-wise"
+              className={({ isActive }) =>
+                `sidebar-link sidebar-sublink${isActive ? " active" : ""}`
+              }
+            >
+              <Receipt size={15} />
+              Bill Wise Report
             </NavLink>
           </div>
         )}

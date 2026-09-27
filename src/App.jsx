@@ -5,6 +5,7 @@ import POCreate from "./pages/POCreate/POCreate";
 import POSheet from "./pages/PO/POSheet";
 import ABSReport from "./pages/ABSReport/ABSReport";
 import POWiseReport from "./pages/POWiseReport/POWiseReport";
+import BillWiseReport from "./pages/BillWiseReport/BillWiseReport";
 import DateWiseReport from "./pages/DateWiseReport/Datewisereport";
 import "./App.css";
 
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/po/:id" element={<POSheet />} />
           <Route path="/abs" element={<ABSReport />} />
           <Route path="/reports/po-wise" element={<POWiseReport />} />
+          <Route path="/reports/bill-wise" element={<BillWiseReport />} />
           <Route path="/reports/date-wise" element={<DateWiseReport />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
