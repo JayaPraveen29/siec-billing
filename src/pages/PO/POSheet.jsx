@@ -1250,7 +1250,7 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
           <label style={{ display: "block" }}>
             <span className="field-label">Invoice No.</span>
             <input
-              required
+              placeholder="Optional — can be added later"
               value={invoiceNo}
               onChange={(e) => setInvoiceNo(e.target.value)}
               className="input"

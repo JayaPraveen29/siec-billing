@@ -5,7 +5,7 @@
 // Expected layout (matches the original spreadsheets):
 //   B2            PO No.
 //   M2            Opening Material Advance
-//   Row 4         Invoice numbers, starting at column D
+//   Row 4         Invoice numbers, starting at column D (optional — may be blank)
 //   Row 5         Invoice dates,   starting at column D
 //   Rows 6..N     Items: A=Sr.No, B=Description, C=Wt/Kg, D..=qty billed per invoice
 //   Row N (SUM)   Totals row — column C holds a SUM() formula; this marks the end of items
@@ -69,24 +69,9 @@ export function parsePOSheet(workbook, sheetName) {
   const openingMatAdvanceCell = cellAt(ws, 2, 13); // M2
   const openingMatAdvance = openingMatAdvanceCell ? Number(openingMatAdvanceCell.v) || 0 : 0;
 
-  // --- Invoice header: numbers (row 4) + dates (row 5), left-to-right from column D ---
-  const invoiceCols = [];
-  for (let col = COL_START; col < COL_START + MAX_INVOICE_COLS; col++) {
-    const numCell = cellAt(ws, 4, col);
-    if (!numCell || numCell.v === undefined || numCell.v === "") break;
-    const dateCell = cellAt(ws, 5, col);
-    invoiceCols.push({
-      col,
-      invoiceNo: String(numCell.v).trim(),
-      invoiceDate: excelSerialToIso(dateCell?.v),
-    });
-  }
-  if (invoiceCols.length === 0) {
-    throw new Error("No invoice numbers found in row 4 — check the sheet layout.");
-  }
-
   // --- Item rows: stop at the first row whose column C is a formula (the SUM totals row) ---
   const items = [];
+  const rawItems = []; // { row, srNo, description, weightKg }
   let row = ITEM_START_ROW;
   while (row < MAX_SCAN_ROW) {
     const cCell = cellAt(ws, row, 3);
@@ -104,19 +89,62 @@ export function parsePOSheet(workbook, sheetName) {
     const description = String(bCell.v).trim();
     const weightKg = Number(cCell.v) || 0;
 
-    const allocations = {}; // invoiceNo -> qty, remapped to item ids by the caller
-    invoiceCols.forEach(({ col, invoiceNo }) => {
-      const qtyCell = cellAt(ws, row, col);
-      const qty = qtyCell ? Number(qtyCell.v) || 0 : 0;
-      if (qty > 0) allocations[invoiceNo] = qty;
-    });
-
-    items.push({ srNo, description, weightKg, allocations });
+    const item = { row, srNo, description, weightKg };
+    rawItems.push(item);
+    items.push(item);
     row++;
   }
   if (items.length === 0) {
     throw new Error(`No item rows found starting at row ${ITEM_START_ROW}.`);
   }
+
+  const itemEndRow = row; // first non-item row (totals row)
+
+  // --- Invoice columns: numbers (row 4) + dates (row 5), left-to-right from column D ---
+  // Invoice numbers are OPTIONAL. A column counts as an invoice if it has an
+  // invoice number, an invoice date, or any billed quantity in the item rows.
+  // Invoices without a number are imported with invoiceNo "" and can be filled
+  // in later from the website.
+  const hasVal = (c) => c && c.v !== undefined && c.v !== null && String(c.v).trim() !== "";
+  const invoiceCols = [];
+  for (let col = COL_START; col < COL_START + MAX_INVOICE_COLS; col++) {
+    const numCell = cellAt(ws, 4, col);
+    const dateCell = cellAt(ws, 5, col);
+    let hasQty = false;
+    for (let r = ITEM_START_ROW; r < itemEndRow; r++) {
+      const q = cellAt(ws, r, col);
+      if (hasVal(q) && Number(q.v) > 0) {
+        hasQty = true;
+        break;
+      }
+    }
+    if (!hasVal(numCell) && !hasVal(dateCell) && !hasQty) {
+      // Blank column: stop only if nothing further right has data either
+      let more = false;
+      for (let c2 = col + 1; c2 < col + 4; c2++) {
+        if (hasVal(cellAt(ws, 4, c2)) || hasVal(cellAt(ws, 5, c2))) more = true;
+      }
+      if (!more) break;
+      continue;
+    }
+    invoiceCols.push({
+      col,
+      key: `col${col}`, // internal key — unique even when invoiceNo is blank
+      invoiceNo: hasVal(numCell) ? String(numCell.v).trim() : "",
+      invoiceDate: excelSerialToIso(dateCell?.v),
+    });
+  }
+  // No invoice columns is not an error: items still import and invoices can be added later on the site.
+
+  // Per-item allocations, keyed by internal column key
+  rawItems.forEach((it) => {
+    it.allocations = {};
+    invoiceCols.forEach(({ col, key }) => {
+      const qtyCell = cellAt(ws, it.row, col);
+      const qty = qtyCell ? Number(qtyCell.v) || 0 : 0;
+      if (qty > 0) it.allocations[key] = qty;
+    });
+  });
 
   // --- Summary rows below the items: find by label text in column B, not fixed row numbers ---
   let unitRate = 0;
@@ -157,10 +185,10 @@ export function parsePOSheet(workbook, sheetName) {
 
   const paymentByInvoiceNo = {};
   if (paymentRow) {
-    invoiceCols.forEach(({ col, invoiceNo }) => {
+    invoiceCols.forEach(({ col, key }) => {
       const cell = cellAt(ws, paymentRow, col);
       const val = cell ? Number(cell.v) || 0 : 0;
-      if (val) paymentByInvoiceNo[invoiceNo] = val;
+      if (val) paymentByInvoiceNo[key] = val;
     });
   }
 
@@ -174,15 +202,15 @@ export function parsePOSheet(workbook, sheetName) {
   function readOverrideRow(sourceRow, { blankMeansZero }) {
     const overrides = {};
     if (!sourceRow) return overrides;
-    invoiceCols.forEach(({ col, invoiceNo }) => {
+    invoiceCols.forEach(({ col, key }) => {
       const cell = cellAt(ws, sourceRow, col);
       if (!cell || cell.v === undefined || cell.v === "") {
-        if (blankMeansZero) overrides[invoiceNo] = 0;
+        if (blankMeansZero) overrides[key] = 0;
         return;
       }
       if (cell.f) return; // formula-driven, matches the app's own calculation
       const val = Number(cell.v);
-      if (Number.isFinite(val)) overrides[invoiceNo] = val;
+      if (Number.isFinite(val)) overrides[key] = val;
     });
     return overrides;
   }
@@ -190,14 +218,14 @@ export function parsePOSheet(workbook, sheetName) {
   const matAdvOverrideByInvoiceNo = readOverrideRow(matAdvRow, { blankMeansZero: false });
   const tdsOverrideByInvoiceNo = readOverrideRow(tdsRow, { blankMeansZero: true });
 
-  const invoices = invoiceCols.map(({ invoiceNo, invoiceDate }) => ({
+  const invoices = invoiceCols.map(({ key, invoiceNo, invoiceDate }) => ({
     invoiceNo,
     invoiceDate,
-    paymentReceived: paymentByInvoiceNo[invoiceNo] || 0,
-    matAdvanceOverride: matAdvOverrideByInvoiceNo[invoiceNo],
-    tdsOverride: tdsOverrideByInvoiceNo[invoiceNo],
+    paymentReceived: paymentByInvoiceNo[key] || 0,
+    matAdvanceOverride: matAdvOverrideByInvoiceNo[key],
+    tdsOverride: tdsOverrideByInvoiceNo[key],
     allocationsByItemSrNo: items.reduce((acc, it) => {
-      if (it.allocations[invoiceNo]) acc[it.srNo] = it.allocations[invoiceNo];
+      if (it.allocations[key]) acc[it.srNo] = it.allocations[key];
       return acc;
     }, {}),
   }));
