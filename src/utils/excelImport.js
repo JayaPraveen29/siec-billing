@@ -37,7 +37,17 @@ function cellAt(ws, row, col) {
 }
 
 function excelSerialToIso(v) {
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (v instanceof Date && !Number.isNaN(v.getTime())) {
+    // SheetJS (cellDates:true) builds the Date at LOCAL midnight. Using
+    // toISOString() converts to UTC, which in IST (UTC+5:30) rolls the date
+    // back by one day. Read the LOCAL calendar parts instead. The +12h nudge
+    // absorbs SheetJS's few-second rounding so we never land on the previous day.
+    const d = new Date(v.getTime() + 12 * 60 * 60 * 1000);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
   return "";
 }
 

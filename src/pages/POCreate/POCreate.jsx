@@ -7,8 +7,12 @@ import { fmtNum } from "../../utils/format";
 import TitleBlock from "../../components/TitleBlock";
 import "./POCreate.css";
 
+// Options for the "Group" dropdown. Edit this list to add/rename groups.
+const PO_GROUPS = ["SIEC", "ST"];
+
 const emptyForm = {
   poNumber: "",
+  group: "",
   unitRate: "",
   gstPercent: "18",
   tdsPercent: "0.1",
@@ -73,12 +77,17 @@ export default function POCreate() {
       setError("PO Number is required.");
       return;
     }
+    if (!form.group) {
+      setError("Please select a Group.");
+      return;
+    }
     setError("");
     setSaving(true);
     try {
       const ref = await createPOSheet({
         code: form.poNumber.trim(),
         poNumber: form.poNumber.trim(),
+        group: form.group,
         unitRate: Number(form.unitRate) || 0,
         gstPercent: Number(form.gstPercent) || 0,
         tdsPercent: Number(form.tdsPercent) || 0,
@@ -125,16 +134,35 @@ export default function POCreate() {
             <h2 className="section-title">PO Details</h2>
           </div>
 
-          <label style={{ display: "block" }}>
-            <span className="field-label">PO Number</span>
-            <input
-              required
-              value={form.poNumber}
-              onChange={(e) => setForm({ ...form, poNumber: e.target.value })}
-              className="input"
-              style={{ marginTop: "0.25rem" }}
-            />
-          </label>
+          <div className="form-row-2">
+            <label style={{ display: "block" }}>
+              <span className="field-label">PO Number</span>
+              <input
+                required
+                value={form.poNumber}
+                onChange={(e) => setForm({ ...form, poNumber: e.target.value })}
+                className="input"
+                style={{ marginTop: "0.25rem" }}
+              />
+            </label>
+            <label style={{ display: "block" }}>
+              <span className="field-label">Group</span>
+              <select
+                required
+                value={form.group}
+                onChange={(e) => setForm({ ...form, group: e.target.value })}
+                className="input"
+                style={{ marginTop: "0.25rem" }}
+              >
+                <option value="">Select group</option>
+                {PO_GROUPS.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           <div className="form-row-2" style={{ marginTop: "0.75rem" }}>
             <label style={{ display: "block" }}>

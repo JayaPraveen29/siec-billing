@@ -15,8 +15,12 @@ import ConfirmDialog from "../../components/ConfirmDialog";
 import TitleBlock from "../../components/TitleBlock";
 import "./Dashboard.css";
 
+// Options for the "Group" dropdown. Edit this list to add/rename groups.
+const PO_GROUPS = ["SIEC", "ST"];
+
 const emptyForm = {
   poNumber: "",
+  group: "",
   unitRate: "",
   gstPercent: "18",
   tdsPercent: "0.1",
@@ -67,6 +71,7 @@ export default function Dashboard() {
       await createPOSheet({
         code: form.poNumber.trim(),
         poNumber: form.poNumber.trim(),
+        group: form.group,
         unitRate: Number(form.unitRate) || 0,
         gstPercent: Number(form.gstPercent) || 0,
         tdsPercent: Number(form.tdsPercent) || 0,
@@ -146,7 +151,10 @@ export default function Dashboard() {
               <Trash2 size={16} />
             </button>
             <Link to={`/po/${po.id}`} className="po-card-link">
-              <div className="po-card-po-number">{po.poNumber}</div>
+              <div className="po-card-top">
+                <div className="po-card-po-number">{po.poNumber}</div>
+                {po.group && <span className="po-card-group">{po.group}</span>}
+              </div>
               <div className="po-card-code">
                 {po.code}
                 <ArrowUpRight size={18} className="po-card-code-arrow" />
@@ -175,6 +183,22 @@ export default function Dashboard() {
                 placeholder="3710057452 - 127 BR"
                 className="input"
               />
+            </Field>
+
+            <Field label="Group">
+              <select
+                required
+                value={form.group}
+                onChange={(e) => setForm({ ...form, group: e.target.value })}
+                className="input"
+              >
+                <option value="">Select group</option>
+                {PO_GROUPS.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
             </Field>
 
             <div className="form-row-2">

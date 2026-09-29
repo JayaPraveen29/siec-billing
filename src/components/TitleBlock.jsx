@@ -2,7 +2,7 @@
 // structural fabrication drawing — a bordered grid of stamped fields.
 import "./TitleBlock.css";
 
-export default function TitleBlock({ docType, fields = [], company = "SIEC INDIA PVT LTD" }) {
+export default function TitleBlock({ docType, fields = [], company = "SIEC GROUP" }) {
   return (
     <div className="title-block">
       <div className="title-block-top">

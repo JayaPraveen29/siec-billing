@@ -25,6 +25,9 @@ import { usePOImport } from "../../hooks/usePOImport";
 import ImportPOModal from "./ImportPOModal";
 import "./POSheet.css";
 
+// Options for the "Group" dropdown. Edit this list to add/rename groups.
+const PO_GROUPS = ["SIEC", "ST"];
+
 const emptyItem = { srNo: "", description: "", weightKg: "" };
 
 // --- DD-MM-YY <-> ISO (yyyy-mm-dd) helpers for manual date entry ---
@@ -376,6 +379,7 @@ export default function POSheet() {
           docType="PO Billing Ledger"
           fields={[
             { label: "PO No.", value: po.poNumber },
+            { label: "Group", value: po.group || "—" },
             { label: "Sheet Code", value: po.code },
             { label: "Unit Rate", value: `₹${fmtNum(po.unitRate, 2)}/kg` },
             { label: "GST", value: `${po.gstPercent}%` },
@@ -896,6 +900,7 @@ export default function POSheet() {
 // source spreadsheet. These drive every downstream formula in ledger.js.
 function PoSettingsModal({ po, onCancel, onSave }) {
   const [form, setForm] = useState({
+    group: po.group ?? "",
     unitRate: po.unitRate ?? "",
     gstPercent: po.gstPercent ?? "",
     tdsPercent: po.tdsPercent ?? "",
@@ -909,6 +914,7 @@ function PoSettingsModal({ po, onCancel, onSave }) {
     setSaving(true);
     try {
       await onSave({
+        group: form.group,
         unitRate: Number(form.unitRate) || 0,
         gstPercent: Number(form.gstPercent) || 0,
         tdsPercent: Number(form.tdsPercent) || 0,
@@ -924,6 +930,23 @@ function PoSettingsModal({ po, onCancel, onSave }) {
     <div className="modal-overlay">
       <form onSubmit={submit} className="modal-panel">
         <h3 className="modal-title">Edit Rate & Settings</h3>
+
+        <label style={{ display: "block", marginBottom: "0.75rem" }}>
+          <span className="field-label">Group</span>
+          <select
+            value={form.group}
+            onChange={(e) => setForm({ ...form, group: e.target.value })}
+            className="input"
+            style={{ marginTop: "0.25rem" }}
+          >
+            <option value="">Not set</option>
+            {PO_GROUPS.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <label style={{ display: "block" }}>
           <span className="field-label">Unit Rate (₹/kg)</span>
