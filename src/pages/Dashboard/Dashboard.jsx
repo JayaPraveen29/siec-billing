@@ -18,6 +18,8 @@ import "./Dashboard.css";
 // Options for the "Group" dropdown. Edit this list to add/rename groups.
 const PO_GROUPS = ["SIEC", "ST"];
 
+const GROUP_FILTERS = ["All", ...PO_GROUPS];
+
 const emptyForm = {
   poNumber: "",
   group: "",
@@ -30,7 +32,8 @@ const emptyForm = {
 
 export default function Dashboard() {
   const [poSheets, setPoSheets] = useState(null);
-  const [summary, setSummary] = useState(null);
+  const [allData, setAllData] = useState(null);
+  const [groupFilter, setGroupFilter] = useState("All");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -46,7 +49,21 @@ export default function Dashboard() {
     let cancelled = false;
     fetchAllPOData().then((all) => {
       if (cancelled) return;
-      const totals = all.reduce(
+      setAllData(all);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [poSheets, refreshKey]);
+
+  // Summary cards follow the selected group filter.
+  const summary = useMemo(() => {
+    if (!allData) return null;
+    return allData
+      .filter(
+        ({ po }) => groupFilter === "All" || (po.group || "") === groupFilter
+      )
+      .reduce(
         (acc, { po, items, invoices }) => {
           const ledger = computePOLedger(po, items, invoices);
           acc.netReceivable += ledger.totals.netReceivable;
@@ -57,12 +74,25 @@ export default function Dashboard() {
         },
         { netReceivable: 0, received: 0, balance: 0, weightPending: 0 }
       );
-      setSummary(totals);
+  }, [allData, groupFilter]);
+
+  const groupCounts = useMemo(() => {
+    const counts = { All: poSheets ? poSheets.length : 0 };
+    PO_GROUPS.forEach((g) => {
+      counts[g] = poSheets ? poSheets.filter((po) => po.group === g).length : 0;
     });
-    return () => {
-      cancelled = true;
-    };
-  }, [poSheets, refreshKey]);
+    return counts;
+  }, [poSheets]);
+
+  const visiblePOs = useMemo(
+    () =>
+      poSheets
+        ? poSheets.filter(
+            (po) => groupFilter === "All" || po.group === groupFilter
+          )
+        : null,
+    [poSheets, groupFilter]
+  );
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -98,7 +128,7 @@ export default function Dashboard() {
       <TitleBlock
         docType="Purchase Order Register"
         fields={[
-          { label: "PO Sheets", value: poSheets ? poSheets.length : "—" },
+          { label: "PO Sheets", value: visiblePOs ? visiblePOs.length : "—" },
           { label: "Date", value: new Date().toLocaleDateString("en-GB") },
         ]}
       />
@@ -132,6 +162,22 @@ export default function Dashboard() {
         </button>
       </div>
 
+      <div className="group-filter" role="tablist" aria-label="Filter by group">
+        {GROUP_FILTERS.map((g) => (
+          <button
+            key={g}
+            type="button"
+            role="tab"
+            aria-selected={groupFilter === g}
+            onClick={() => setGroupFilter(g)}
+            className={`group-filter-btn${groupFilter === g ? " active" : ""}`}
+          >
+            {g}
+            <span className="group-filter-count">{groupCounts[g]}</span>
+          </button>
+        ))}
+      </div>
+
       {poSheets === null && <Loading label="Loading PO sheets" />}
 
       {poSheets && poSheets.length === 0 && (
@@ -140,8 +186,12 @@ export default function Dashboard() {
         </div>
       )}
 
+      {poSheets && poSheets.length > 0 && visiblePOs.length === 0 && (
+        <div className="empty-state">No {groupFilter} PO sheets found.</div>
+      )}
+
       <div className="po-grid">
-        {poSheets?.map((po) => (
+        {visiblePOs?.map((po) => (
           <div key={po.id} className="po-card">
             <button
               onClick={() => setToDelete(po.id)}

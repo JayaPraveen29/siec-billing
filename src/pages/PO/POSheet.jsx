@@ -25,13 +25,14 @@ import { usePOImport } from "../../hooks/usePOImport";
 import ImportPOModal from "./ImportPOModal";
 import "./POSheet.css";
 
-// Options for the "Group" dropdown. Edit this list to add/rename groups.
-const PO_GROUPS = ["SIEC", "ST"];
 
 const emptyItem = { srNo: "", description: "", weightKg: "" };
 
 // --- DD-MM-YY <-> ISO (yyyy-mm-dd) helpers for manual date entry ---
 // (Still used by the Add/Edit Invoice date field, which stays free-text.)
+// Options for the "Group" dropdown. Edit this list to add/rename groups.
+const PO_GROUPS = ["SIEC", "ST"];
+
 function ddmmyyToIso(str) {
   const m = /^(\d{2})-(\d{2})-(\d{2})$/.exec((str || "").trim());
   if (!m) return null;
@@ -939,7 +940,7 @@ function PoSettingsModal({ po, onCancel, onSave }) {
             className="input"
             style={{ marginTop: "0.25rem" }}
           >
-            <option value="">Not set</option>
+            <option value="">Group</option>
             {PO_GROUPS.map((g) => (
               <option key={g} value={g}>
                 {g}
