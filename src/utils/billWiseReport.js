@@ -60,11 +60,25 @@ export function computeBillWiseReport(poSheets) {
     });
   });
 
-  // Newest bill first by default.
+  // Sort by bill number, ascending (1, 2, 3 ... 10, 11). numeric:true makes
+  // the comparison natural so "2" comes before "10", and "INV-2" before
+  // "INV-10". Ties fall back to PO code, then bill date.
   rows.sort((a, b) => {
+    const byBill = String(a.billNo ?? "").localeCompare(
+      String(b.billNo ?? ""),
+      undefined,
+      { numeric: true, sensitivity: "base" }
+    );
+    if (byBill !== 0) return byBill;
+    const byPo = String(a.poCode ?? "").localeCompare(
+      String(b.poCode ?? ""),
+      undefined,
+      { numeric: true, sensitivity: "base" }
+    );
+    if (byPo !== 0) return byPo;
     const da = a.billDate ? new Date(a.billDate).getTime() : -Infinity;
     const db = b.billDate ? new Date(b.billDate).getTime() : -Infinity;
-    return db - da;
+    return da - db;
   });
 
   const grandTotal = rows.reduce(
