@@ -130,7 +130,7 @@ export default function POWiseReport() {
           />
         </div>
         <select value={group} onChange={(e) => setGroup(e.target.value)}>
-          <option value="all">All Groups</option>
+          <option value="all">Group</option>
           {PO_GROUPS.map((g) => (
             <option key={g} value={g}>
               {g}
