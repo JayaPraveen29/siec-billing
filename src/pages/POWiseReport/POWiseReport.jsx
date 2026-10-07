@@ -17,6 +17,9 @@ import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import "./POWiseReport.css";
 
+// Options for the "Group" dropdown. Keep in sync with the PO create page.
+const PO_GROUPS = ["SIEC", "ST"];
+
 const QTY_FILTERS = [
   { value: "all", label: "All Quantity Status" },
   { value: "fully-billed", label: "Fully Billed" },
@@ -38,6 +41,7 @@ export default function POWiseReport() {
   const [exportingPdf, setExportingPdf] = useState(false);
 
   const [search, setSearch] = useState("");
+  const [group, setGroup] = useState("all");
   const [qtyStatus, setQtyStatus] = useState("all");
   const [paymentStatus, setPaymentStatus] = useState("all");
 
@@ -54,8 +58,10 @@ export default function POWiseReport() {
 
   const report = useMemo(() => {
     if (!allData) return null;
-    return computePOWiseReport(allData);
-  }, [allData]);
+    return computePOWiseReport(
+      allData.filter((d) => group === "all" || d.po.group === group)
+    );
+  }, [allData, group]);
 
   const visibleRows = useMemo(() => {
     if (!report) return [];
@@ -123,6 +129,14 @@ export default function POWiseReport() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <select value={group} onChange={(e) => setGroup(e.target.value)}>
+          <option value="all">All Groups</option>
+          {PO_GROUPS.map((g) => (
+            <option key={g} value={g}>
+              {g}
+            </option>
+          ))}
+        </select>
         <select value={qtyStatus} onChange={(e) => setQtyStatus(e.target.value)}>
           {QTY_FILTERS.map((f) => (
             <option key={f.value} value={f.value}>

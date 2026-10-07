@@ -16,6 +16,9 @@ import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import "./BillWiseReport.css";
 
+// Options for the "Group" dropdown. Keep in sync with the PO create page.
+const PO_GROUPS = ["SIEC", "ST"];
+
 const PAYMENT_FILTERS = [
   { value: "all", label: "All Payment Status" },
   { value: "fully-paid", label: "Fully Paid" },
@@ -30,6 +33,7 @@ export default function BillWiseReport() {
   const [exportingPdf, setExportingPdf] = useState(false);
 
   const [search, setSearch] = useState("");
+  const [group, setGroup] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("all");
@@ -47,8 +51,10 @@ export default function BillWiseReport() {
 
   const report = useMemo(() => {
     if (!allData) return null;
-    return computeBillWiseReport(allData);
-  }, [allData]);
+    return computeBillWiseReport(
+      allData.filter((d) => group === "all" || d.po.group === group)
+    );
+  }, [allData, group]);
 
   const visibleRows = useMemo(() => {
     if (!report) return [];
@@ -80,6 +86,7 @@ export default function BillWiseReport() {
     setFromDate("");
     setToDate("");
     setPaymentStatus("all");
+    setGroup("all");
   }
 
   return (
@@ -146,6 +153,14 @@ export default function BillWiseReport() {
             />
           </label>
         </div>
+        <select value={group} onChange={(e) => setGroup(e.target.value)}>
+          <option value="all">All Groups</option>
+          {PO_GROUPS.map((g) => (
+            <option key={g} value={g}>
+              {g}
+            </option>
+          ))}
+        </select>
         <select
           value={paymentStatus}
           onChange={(e) => setPaymentStatus(e.target.value)}
@@ -156,7 +171,7 @@ export default function BillWiseReport() {
             </option>
           ))}
         </select>
-        {(search || fromDate || toDate || paymentStatus !== "all") && (
+        {(search || fromDate || toDate || paymentStatus !== "all" || group !== "all") && (
           <button type="button" className="billwise-clear" onClick={clearFilters}>
             Clear filters
           </button>

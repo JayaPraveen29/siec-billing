@@ -350,7 +350,17 @@ export default function POSheet() {
   }
 
   async function handleSaveSettings(data) {
-    await updatePOSheet(id, data);
+    // Keep the sheet code in step with the PO number. On creation both hold
+    // the same value, so if they were identical (or code was empty) before
+    // this edit, move the code along with the new PO number. A custom code
+    // that was set separately is left untouched.
+    const payload = { ...data };
+    const oldPoNumber = po?.poNumber ?? "";
+    const oldCode = po?.code ?? "";
+    if (data.poNumber !== oldPoNumber && (!oldCode || oldCode === oldPoNumber)) {
+      payload.code = data.poNumber;
+    }
+    await updatePOSheet(id, payload);
     setSettingsModal(false);
   }
 
@@ -895,12 +905,13 @@ export default function POSheet() {
   );
 }
 
-// Edit the PO header settings — Unit Rate, GST %, TDS %, Material Advance %,
+// Edit the PO header settings — PO Number, Group, Unit Rate, GST %, TDS %, Material Advance %,
 // Opening Material Advance — the same values that live in cells C17, and the
 // "GST @ x%" / "TDS @ x%" / "Material Advance @ x%" row labels + M2 in the
 // source spreadsheet. These drive every downstream formula in ledger.js.
 function PoSettingsModal({ po, onCancel, onSave }) {
   const [form, setForm] = useState({
+    poNumber: po.poNumber ?? "",
     group: po.group ?? "",
     unitRate: po.unitRate ?? "",
     gstPercent: po.gstPercent ?? "",
@@ -915,6 +926,7 @@ function PoSettingsModal({ po, onCancel, onSave }) {
     setSaving(true);
     try {
       await onSave({
+        poNumber: form.poNumber.trim(),
         group: form.group,
         unitRate: Number(form.unitRate) || 0,
         gstPercent: Number(form.gstPercent) || 0,
@@ -931,6 +943,17 @@ function PoSettingsModal({ po, onCancel, onSave }) {
     <div className="modal-overlay">
       <form onSubmit={submit} className="modal-panel">
         <h3 className="modal-title">Edit Rate & Settings</h3>
+
+        <label style={{ display: "block", marginBottom: "0.75rem" }}>
+          <span className="field-label">PO Number</span>
+          <input
+            required
+            value={form.poNumber}
+            onChange={(e) => setForm({ ...form, poNumber: e.target.value })}
+            className="input"
+            style={{ marginTop: "0.25rem" }}
+          />
+        </label>
 
         <label style={{ display: "block", marginBottom: "0.75rem" }}>
           <span className="field-label">Group</span>

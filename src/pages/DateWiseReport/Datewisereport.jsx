@@ -11,6 +11,9 @@ import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import "./Datewisereport.css";
 
+// Options for the "Group" dropdown. Keep in sync with the PO create page.
+const PO_GROUPS = ["SIEC", "ST"];
+
 const TABS = [
   { key: "invoiceDate", label: "Invoice Date", pendingLabel: "No Invoice Date" },
   { key: "paymentDate", label: "Payment Date", pendingLabel: "Pending / Unpaid" },
@@ -25,6 +28,7 @@ function currentMonthRange() {
 
 export default function DateWiseReport() {
   const [tab, setTab] = useState("invoiceDate");
+  const [group, setGroup] = useState("all");
   const [allData, setAllData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [exportingPdf, setExportingPdf] = useState(false);
@@ -50,8 +54,9 @@ export default function DateWiseReport() {
   const report = useMemo(() => {
     if (!allData) return null;
     const bounds = rangeMode === "all" ? {} : { fromDate, toDate };
-    return computeDateWiseReport(allData, tab, bounds);
-  }, [allData, tab, rangeMode, fromDate, toDate]);
+    const scoped = allData.filter((d) => group === "all" || d.po.group === group);
+    return computeDateWiseReport(scoped, tab, bounds);
+  }, [allData, group, tab, rangeMode, fromDate, toDate]);
 
   function handleExportExcel() {
     if (!report) return;
@@ -118,6 +123,14 @@ export default function DateWiseReport() {
         </div>
 
         <div className="datewise-range">
+          <select value={group} onChange={(e) => setGroup(e.target.value)}>
+            <option value="all">All Groups</option>
+            {PO_GROUPS.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </select>
           <CalendarRange size={15} className="text-muted" />
           <select value={rangeMode} onChange={(e) => setRangeMode(e.target.value)}>
             <option value="month">This Month</option>

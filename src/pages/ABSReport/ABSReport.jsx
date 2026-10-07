@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, FileSpreadsheet, FileText } from "lucide-react";
 import { fetchAllPOData } from "../../services/poService";
 import { computeABSReport } from "../../utils/ledger";
@@ -8,17 +8,28 @@ import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import "./ABSReport.css";
 
+// Options for the "Group" dropdown. Keep in sync with the PO create page.
+const PO_GROUPS = ["SIEC", "ST"];
+
 export default function ABSReport() {
-  const [report, setReport] = useState(null);
+  const [allData, setAllData] = useState(null);
+  const [group, setGroup] = useState("all");
   const [loading, setLoading] = useState(true);
   const [exportingPdf, setExportingPdf] = useState(false);
 
   async function load() {
     setLoading(true);
     const all = await fetchAllPOData();
-    setReport(computeABSReport(all));
+    setAllData(all);
     setLoading(false);
   }
+
+  const report = useMemo(() => {
+    if (!allData) return null;
+    return computeABSReport(
+      allData.filter((d) => group === "all" || d.po.group === group)
+    );
+  }, [allData, group]);
 
   useEffect(() => {
     load();
@@ -73,6 +84,17 @@ export default function ABSReport() {
             Refresh
           </button>
         </div>
+      </div>
+
+      <div className="abs-controls">
+        <select value={group} onChange={(e) => setGroup(e.target.value)}>
+          <option value="all">All Groups</option>
+          {PO_GROUPS.map((g) => (
+            <option key={g} value={g}>
+              {g}
+            </option>
+          ))}
+        </select>
       </div>
 
       {loading && <Loading label="Compiling abstract" />}
@@ -139,7 +161,9 @@ export default function ABSReport() {
 
       {!loading && report && report.groups.length === 0 && (
         <div className="empty-state" style={{ marginTop: "1.5rem" }}>
-          No PO sheets to report on yet.
+          {allData && allData.length === 0
+            ? "No PO sheets to report on yet."
+            : "No POs found for the selected group."}
         </div>
       )}
     </div>
