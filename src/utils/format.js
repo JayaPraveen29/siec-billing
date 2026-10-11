@@ -10,7 +10,7 @@ export function fmtNum(n, decimals = 0) {
 export function fmtINR(n) {
   const v = Number(n);
   if (!Number.isFinite(v)) return "-";
-  return "\u20B9" + fmtNum(v, 0);
+  return (v < 0 ? "-" : "") + "\u20B9" + fmtNum(Math.abs(v), 0);
 }
 
 export function fmtDate(d) {

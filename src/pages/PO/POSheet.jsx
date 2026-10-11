@@ -306,7 +306,7 @@ export default function POSheet() {
         label: "Bal to be received",
         getVal: (r) => r?.balanceToReceive,
         accentFn: (v) => (v > 0.5 ? "text-warn" : "text-ok"),
-        totalMode: "last",
+        totalMode: "unpaid", // Total = sum of unpaid bills only
       },
     ];
   }, [po]);
@@ -618,6 +618,11 @@ export default function POSheet() {
                         sortedInvoicesForMatrix[sortedInvoicesForMatrix.length - 1];
                       const r = lastInv ? invoiceRowById[lastInv.id] : null;
                       rowTotal = Number(def.getVal(r)) || 0;
+                    } else if (def.totalMode === "unpaid") {
+                      rowTotal = sortedInvoicesForMatrix.reduce((sum, inv) => {
+                        const r = invoiceRowById[inv.id];
+                        return sum + (r?.isUnpaid ? Number(def.getVal(r)) || 0 : 0);
+                      }, 0);
                     } else {
                       rowTotal = sortedInvoicesForMatrix.reduce((sum, inv) => {
                         const r = invoiceRowById[inv.id];

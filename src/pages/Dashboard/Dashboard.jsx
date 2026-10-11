@@ -56,7 +56,9 @@ export default function Dashboard() {
     };
   }, [poSheets, refreshKey]);
 
-  // Summary cards follow the selected group filter.
+  // Summary cards follow the selected group filter (All / SIEC / ST).
+  // "Balance to Receive" = the sum, across the visible POs, of each PO sheet's
+  // own "Bal to be received" Total (unpaid bills only — see computePOLedger).
   const summary = useMemo(() => {
     if (!allData) return null;
     return allData

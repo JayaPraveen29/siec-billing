@@ -50,7 +50,7 @@ function summaryRowDefs(po) {
       label: "Bal to be received",
       getVal: (r) => r?.balanceToReceive,
       accentFn: (v) => (v > 0.5 ? COLOR_WARN : COLOR_OK),
-      totalMode: "last",
+      totalMode: "unpaid", // Total = sum of unpaid bills only
     },
   ];
 }
@@ -100,6 +100,11 @@ function buildMatrix(po, ledger) {
       if (def.totalMode === "last") {
         const lastInv = invoices[invoices.length - 1];
         rowTotal = num(def.getVal(lastInv));
+      } else if (def.totalMode === "unpaid") {
+        rowTotal = invoices.reduce(
+          (sum, inv) => sum + (inv.isUnpaid ? num(def.getVal(inv)) : 0),
+          0
+        );
       } else {
         rowTotal = invoices.reduce((sum, inv) => sum + num(def.getVal(inv)), 0);
       }

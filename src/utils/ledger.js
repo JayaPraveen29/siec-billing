@@ -94,6 +94,11 @@ export function computePOLedger(po, items, invoices) {
       netReceivable,
       paymentReceived,
       balanceToReceive,
+      // Counts toward "Bal to be received" when the bill isn't settled:
+      //   balance > Rs 1  -> still due (unpaid / part-paid)  -> positive
+      //   balance < -Rs 1 -> advance / excess payment        -> negative
+      // Bills settled to within Rs 1 are ignored.
+      isUnpaid: Math.abs(balanceToReceive) > 1,
       matAdvanceBalance: runningMatAdvBal,
       days,
     };
@@ -126,14 +131,12 @@ export function computePOLedger(po, items, invoices) {
     tds: invoiceRows.reduce((s, r) => s + r.tds, 0),
     netReceivable: invoiceRows.reduce((s, r) => s + r.netReceivable, 0),
     paymentReceived: invoiceRows.reduce((s, r) => s + r.paymentReceived, 0),
-    // "Balance to Receive" is a running/cumulative figure (like the material
-    // advance balance), not a per-invoice additive line item. Summing every
-    // invoice's balanceToReceive double-counts settled invoices and advance
-    // -only entries. The true outstanding amount is simply the balance left
-    // on the most recent invoice.
-    balanceToReceive: invoiceRows.length
-      ? invoiceRows[invoiceRows.length - 1].balanceToReceive
-      : 0,
+    // Outstanding total = amounts still due (+) less advances/excess
+    // payments (-), ignoring bills that are settled.
+    balanceToReceive: invoiceRows.reduce(
+      (s, r) => s + (r.isUnpaid ? r.balanceToReceive : 0),
+      0
+    ),
   };
 
   return {
