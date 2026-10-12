@@ -78,6 +78,15 @@ export default function Dashboard() {
       );
   }, [allData, groupFilter]);
 
+  // Per-PO "Bal to be received" total (same figure as on the PO sheet).
+  const poBalances = useMemo(() => {
+    const map = {};
+    (allData || []).forEach(({ po, items, invoices }) => {
+      map[po.id] = computePOLedger(po, items, invoices).totals.balanceToReceive;
+    });
+    return map;
+  }, [allData]);
+
   const groupCounts = useMemo(() => {
     const counts = { All: poSheets ? poSheets.length : 0 };
     PO_GROUPS.forEach((g) => {
@@ -216,6 +225,14 @@ export default function Dashboard() {
                 <span>Rate ₹{fmtNum(po.unitRate, 2)}/kg</span>
                 <span>GST {po.gstPercent}%</span>
                 <span>Mat. Adv. {po.matAdvPercent}%</span>
+              </div>
+              <div className="po-card-meta">
+                <span>
+                  Bal to receive:{" "}
+                  {poBalances[po.id] === undefined
+                    ? "…"
+                    : fmtINR(poBalances[po.id])}
+                </span>
               </div>
             </Link>
           </div>
