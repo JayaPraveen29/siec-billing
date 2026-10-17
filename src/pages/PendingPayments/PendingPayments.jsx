@@ -8,7 +8,6 @@ import {
   filterPendingRows,
   ageClass,
   AGE_BUCKETS,
-  PAYMENT_STATUS_LABELS,
 } from "../../utils/pendingPaymentsReport";
 import { fmtNum, fmtINR, fmtDate } from "../../utils/format";
 import TitleBlock from "../../components/TitleBlock";
@@ -24,7 +23,7 @@ const PAYMENT_FILTERS = [
   { value: "partially-paid", label: "Partially Paid" },
 ];
 
-const COLS = 7;
+const COLS = 6;
 
 // ---------------------------------------------------------------------------
 // Group the (already filtered) pending bills by PO:
@@ -72,14 +71,13 @@ const EXPORT_HEADERS = [
   "Paid",
   "Balance",
   "Days Due",
-  "Payment Status",
 ];
 
 // Flatten groups into table rows tagged by kind: "po" | "bill" | "total" | "grand".
 function buildExportRows(groups, grand) {
   const out = [];
   groups.forEach((g) => {
-    out.push({ kind: "po", cells: [`PO: ${g.poCode}`, "", "", "", "", "", ""] });
+    out.push({ kind: "po", cells: [`PO: ${g.poCode}`, "", "", "", "", ""] });
     g.bills.forEach((b) =>
       out.push({
         kind: "bill",
@@ -90,7 +88,6 @@ function buildExportRows(groups, grand) {
           fmtNum(b.paymentReceived, 0),
           fmtNum(b.balanceToReceive, 0),
           b.daysDue ?? "-",
-          PAYMENT_STATUS_LABELS[b.paymentStatus] || b.paymentStatus,
         ],
       })
     );
@@ -98,11 +95,10 @@ function buildExportRows(groups, grand) {
       kind: "total",
       cells: [
         `Total – ${g.poCode}`,
-        `${g.total.billCount} bill${g.total.billCount === 1 ? "" : "s"}`,
+        "",
         fmtNum(g.total.netReceivable, 0),
         fmtNum(g.total.paymentReceived, 0),
         fmtNum(g.total.balanceToReceive, 0),
-        "",
         "",
       ],
     });
@@ -111,11 +107,10 @@ function buildExportRows(groups, grand) {
     kind: "grand",
     cells: [
       "Grand Total",
-      `${grand.billCount} bill${grand.billCount === 1 ? "" : "s"}`,
+      "",
       fmtNum(grand.netReceivable, 0),
       fmtNum(grand.paymentReceived, 0),
       fmtNum(grand.balanceToReceive, 0),
-      "",
       "",
     ],
   });
@@ -136,7 +131,6 @@ function exportToExcel(groups, grand) {
     { wch: 12 },
     { wch: 12 },
     { wch: 10 },
-    { wch: 15 },
   ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Pending Payments");
@@ -153,7 +147,7 @@ async function exportToPDF(groups, grand) {
   doc.setFont(undefined, "normal");
   doc.text("Pending Payments Report", 40, 40);
   doc.setFontSize(9);
-  doc.text(`POs: ${groups.length}   Pending bills: ${grand.billCount}`, 40, 58);
+  doc.text(`POs: ${groups.length}`, 40, 58);
 
   autoTable(doc, {
     head: [EXPORT_HEADERS],
@@ -294,7 +288,7 @@ export default function PendingPayments() {
         <TitleBlock
           docType="PENDING PAYMENTS"
           fields={[
-            { label: "Pending Bills", value: report ? report.rows.length : "—" },
+            { label: "POs", value: report ? new Set(report.rows.map((r) => r.poId)).size : "—" },
             { label: "Generated", value: new Date().toLocaleDateString("en-GB") },
           ]}
         />
@@ -397,7 +391,6 @@ export default function PendingPayments() {
                 <th className="text-right">Paid</th>
                 <th className="text-right">Balance</th>
                 <th className="text-right">Days Due</th>
-                <th>Payment Status</th>
               </tr>
             </thead>
             <tbody>
@@ -433,20 +426,13 @@ export default function PendingPayments() {
                       >
                         {b.daysDue ?? "-"}
                       </td>
-                      <td>
-                        <span className={`pending-badge pay-${b.paymentStatus}`}>
-                          {PAYMENT_STATUS_LABELS[b.paymentStatus]}
-                        </span>
-                      </td>
                     </tr>
                   ))}
 
                   {/* 3. Total for this PO */}
                   <tr style={totalRowStyle}>
                     <td>Total – {g.poCode}</td>
-                    <td>
-                      {g.total.billCount} bill{g.total.billCount === 1 ? "" : "s"}
-                    </td>
+                    <td></td>
                     <td className="text-right tabular text-rivet2">
                       {fmtNum(g.total.netReceivable, 0)}
                     </td>
@@ -457,7 +443,6 @@ export default function PendingPayments() {
                       {fmtNum(g.total.balanceToReceive, 0)}
                     </td>
                     <td></td>
-                    <td></td>
                   </tr>
                 </Fragment>
               ))}
@@ -467,15 +452,12 @@ export default function PendingPayments() {
             <tfoot>
               <tr>
                 <td>Grand Total</td>
-                <td>
-                  {grand.billCount} bill{grand.billCount === 1 ? "" : "s"}
-                </td>
+                <td></td>
                 <td className="text-right tabular text-rivet2">
                   {fmtINR(grand.netReceivable)}
                 </td>
                 <td className="text-right tabular">{fmtINR(grand.paymentReceived)}</td>
                 <td className="text-right tabular">{fmtINR(grand.balanceToReceive)}</td>
-                <td></td>
                 <td></td>
               </tr>
             </tfoot>
