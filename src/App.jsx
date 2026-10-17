@@ -8,6 +8,7 @@ import POWiseReport from "./pages/POWiseReport/POWiseReport";
 import POItemWiseReport from "./pages/POItemWiseReport/POItemWiseReport";
 import BillWiseReport from "./pages/BillWiseReport/BillWiseReport";
 import PendingPayments from "./pages/PendingPayments/PendingPayments";
+import MaterialAdvanceReport from "./pages/MaterialAdvanceReport/MaterialAdvanceReport";
 import DateWiseReport from "./pages/DateWiseReport/Datewisereport";
 import "./App.css";
 
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/reports/po-item-wise" element={<POItemWiseReport />} />
           <Route path="/reports/bill-wise" element={<BillWiseReport />} />
           <Route path="/reports/pending-payments" element={<PendingPayments />} />
+          <Route path="/reports/material-advance" element={<MaterialAdvanceReport />} />
           <Route path="/reports/date-wise" element={<DateWiseReport />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
