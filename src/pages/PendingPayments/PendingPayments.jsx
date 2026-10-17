@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { RefreshCw, FileSpreadsheet, FileText, Search } from "lucide-react";
+import * as XLSX from "xlsx";
 import { fetchAllPOData } from "../../services/poService";
 import {
   computePendingPaymentsReport,
@@ -10,7 +11,6 @@ import {
   PAYMENT_STATUS_LABELS,
 } from "../../utils/pendingPaymentsReport";
 import { fmtNum, fmtINR, fmtDate } from "../../utils/format";
-import * as XLSX from "xlsx";
 import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import "./PendingPayments.css";
@@ -24,65 +24,50 @@ const PAYMENT_FILTERS = [
   { value: "partially-paid", label: "Partially Paid" },
 ];
 
-// ---------------------------------------------------------------------------
-// Combine all pending bills of a PO into a single row.
-// ---------------------------------------------------------------------------
-const MONEY_EPSILON = 1;
+const COLS = 7;
 
-function combineByPO(bills) {
-  const map = new Map();
-  bills.forEach((b) => {
-    let g = map.get(b.poId);
-    if (!g) {
-      g = {
-        poId: b.poId,
-        poCode: b.poCode,
-        billCount: 0,
-        oldestBillDate: b.billDate,
-        daysDue: b.daysDue,
-        netReceivable: 0,
-        paymentReceived: 0,
-        balanceToReceive: 0,
-      };
-      map.set(b.poId, g);
-    }
-    g.billCount += 1;
-    g.netReceivable += b.netReceivable;
-    g.paymentReceived += b.paymentReceived;
-    g.balanceToReceive += b.balanceToReceive;
-    if ((b.daysDue ?? -1) > (g.daysDue ?? -1)) {
-      g.daysDue = b.daysDue;
-      g.oldestBillDate = b.billDate;
-    }
-  });
-  const rows = [...map.values()].map((g) => ({
-    ...g,
-    paymentStatus: g.paymentReceived <= MONEY_EPSILON ? "unpaid" : "partially-paid",
-  }));
-  rows.sort((a, b) => (b.daysDue ?? -1) - (a.daysDue ?? -1));
-  return rows;
-}
-
-function sumRows(rows) {
-  return rows.reduce(
-    (a, r) => {
-      a.billCount += r.billCount;
-      a.netReceivable += r.netReceivable;
-      a.paymentReceived += r.paymentReceived;
-      a.balanceToReceive += r.balanceToReceive;
+// ---------------------------------------------------------------------------
+// Group the (already filtered) pending bills by PO:
+//   PO heading  ->  its pending bills  ->  total for that PO
+// POs are ordered by their oldest pending bill (most days due first).
+// ---------------------------------------------------------------------------
+function sumOf(bills) {
+  return bills.reduce(
+    (a, b) => {
+      a.netReceivable += b.netReceivable;
+      a.paymentReceived += b.paymentReceived;
+      a.balanceToReceive += b.balanceToReceive;
       return a;
     },
-    { billCount: 0, netReceivable: 0, paymentReceived: 0, balanceToReceive: 0 }
+    { netReceivable: 0, paymentReceived: 0, balanceToReceive: 0 }
   );
+}
+
+function groupByPO(bills) {
+  const map = new Map();
+  bills.forEach((b) => {
+    if (!map.has(b.poId)) map.set(b.poId, { poId: b.poId, poCode: b.poCode, bills: [] });
+    map.get(b.poId).bills.push(b);
+  });
+  const groups = [...map.values()].map((g) => {
+    // Oldest bill first inside each PO.
+    g.bills.sort((a, b) => (b.daysDue ?? -1) - (a.daysDue ?? -1));
+    return {
+      ...g,
+      total: { ...sumOf(g.bills), billCount: g.bills.length },
+      maxDaysDue: g.bills[0]?.daysDue ?? null,
+    };
+  });
+  groups.sort((a, b) => (b.maxDaysDue ?? -1) - (a.maxDaysDue ?? -1));
+  return groups;
 }
 
 // ---------------------------------------------------------------------------
 // Exports (kept in this file so only one file needs to change)
 // ---------------------------------------------------------------------------
 const EXPORT_HEADERS = [
-  "PO",
-  "Pending Bills",
-  "Oldest Bill Date",
+  "Bill No.",
+  "Bill Date",
   "Net Recv.",
   "Paid",
   "Balance",
@@ -90,46 +75,63 @@ const EXPORT_HEADERS = [
   "Payment Status",
 ];
 
-function exportRow(r) {
-  return [
-    r.poCode,
-    r.billCount,
-    fmtDate(r.oldestBillDate),
-    fmtNum(r.netReceivable, 0),
-    fmtNum(r.paymentReceived, 0),
-    fmtNum(r.balanceToReceive, 0),
-    r.daysDue ?? "-",
-    PAYMENT_STATUS_LABELS[r.paymentStatus] || r.paymentStatus,
-  ];
-}
-
-function exportTotal(t) {
-  return [
-    "Total Pending",
-    t.billCount,
-    "",
-    fmtNum(t.netReceivable, 0),
-    fmtNum(t.paymentReceived, 0),
-    fmtNum(t.balanceToReceive, 0),
-    "",
-    "",
-  ];
+// Flatten groups into table rows tagged by kind: "po" | "bill" | "total" | "grand".
+function buildExportRows(groups, grand) {
+  const out = [];
+  groups.forEach((g) => {
+    out.push({ kind: "po", cells: [`PO: ${g.poCode}`, "", "", "", "", "", ""] });
+    g.bills.forEach((b) =>
+      out.push({
+        kind: "bill",
+        cells: [
+          b.billNo,
+          fmtDate(b.billDate),
+          fmtNum(b.netReceivable, 0),
+          fmtNum(b.paymentReceived, 0),
+          fmtNum(b.balanceToReceive, 0),
+          b.daysDue ?? "-",
+          PAYMENT_STATUS_LABELS[b.paymentStatus] || b.paymentStatus,
+        ],
+      })
+    );
+    out.push({
+      kind: "total",
+      cells: [
+        `Total – ${g.poCode}`,
+        `${g.total.billCount} bill${g.total.billCount === 1 ? "" : "s"}`,
+        fmtNum(g.total.netReceivable, 0),
+        fmtNum(g.total.paymentReceived, 0),
+        fmtNum(g.total.balanceToReceive, 0),
+        "",
+        "",
+      ],
+    });
+  });
+  out.push({
+    kind: "grand",
+    cells: [
+      "Grand Total",
+      `${grand.billCount} bill${grand.billCount === 1 ? "" : "s"}`,
+      fmtNum(grand.netReceivable, 0),
+      fmtNum(grand.paymentReceived, 0),
+      fmtNum(grand.balanceToReceive, 0),
+      "",
+      "",
+    ],
+  });
+  return out;
 }
 
 function stamp() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function exportToExcel(totals, rows) {
-  const ws = XLSX.utils.aoa_to_sheet([
-    EXPORT_HEADERS,
-    ...rows.map(exportRow),
-    exportTotal(totals),
-  ]);
+function exportToExcel(groups, grand) {
+  const rows = buildExportRows(groups, grand);
+  const ws = XLSX.utils.aoa_to_sheet([EXPORT_HEADERS, ...rows.map((r) => r.cells)]);
   ws["!cols"] = [
-    { wch: 16 },
+    { wch: 18 },
     { wch: 14 },
-    { wch: 16 },
     { wch: 13 },
     { wch: 12 },
     { wch: 12 },
@@ -141,19 +143,21 @@ function exportToExcel(totals, rows) {
   XLSX.writeFile(wb, `Pending-Payments-${stamp()}.xlsx`);
 }
 
-async function exportToPDF(totals, rows) {
+async function exportToPDF(groups, grand) {
   const { default: jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
+  const rows = buildExportRows(groups, grand);
+
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
   doc.setFontSize(11);
   doc.setFont(undefined, "normal");
   doc.text("Pending Payments Report", 40, 40);
   doc.setFontSize(9);
-  doc.text(`POs with pending bills: ${rows.length}`, 40, 58);
+  doc.text(`POs: ${groups.length}   Pending bills: ${grand.billCount}`, 40, 58);
+
   autoTable(doc, {
     head: [EXPORT_HEADERS],
-    body: rows.map((r) => exportRow(r).map((v) => String(v))),
-    foot: [exportTotal(totals).map((v) => String(v))],
+    body: rows.map((r) => r.cells.map((v) => String(v))),
     startY: 72,
     margin: { left: 40, right: 40 },
     theme: "grid",
@@ -167,18 +171,40 @@ async function exportToPDF(totals, rows) {
       textColor: 20,
     },
     headStyles: { fillColor: false, textColor: 20, fontStyle: "normal", lineWidth: 0.5 },
-    footStyles: { fillColor: false, textColor: 20, fontStyle: "normal", lineWidth: 0.5 },
     alternateRowStyles: { fillColor: false },
     columnStyles: {
-      1: { halign: "right" },
+      2: { halign: "right" },
       3: { halign: "right" },
       4: { halign: "right" },
       5: { halign: "right" },
-      6: { halign: "right" },
+    },
+    didParseCell: (data) => {
+      if (data.section !== "body") return;
+      const kind = rows[data.row.index]?.kind;
+      if (kind === "po") {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fillColor = [235, 235, 235];
+      } else if (kind === "total" || kind === "grand") {
+        data.cell.styles.fontStyle = "bold";
+      }
     },
   });
+
   doc.save(`Pending-Payments-${stamp()}.pdf`);
 }
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+const poRowStyle = {
+  background: "var(--color-plate2)",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+const totalRowStyle = {
+  fontWeight: 600,
+  borderTop: "1px solid var(--color-line)",
+};
 
 export default function PendingPayments() {
   const navigate = useNavigate();
@@ -211,36 +237,35 @@ export default function PendingPayments() {
     );
   }, [allData, group]);
 
-  // Filter individual bills first (search / dates / days-due bucket),
-  // then combine what is left into one row per PO.
-  const visibleRows = useMemo(() => {
+  const visibleBills = useMemo(() => {
     if (!report) return [];
-    const bills = filterPendingRows(report.rows, {
+    return filterPendingRows(report.rows, {
       search,
       fromDate,
       toDate,
-      paymentStatus: "all",
+      paymentStatus,
       ageBucket,
     });
-    const combined = combineByPO(bills);
-    return paymentStatus === "all"
-      ? combined
-      : combined.filter((r) => r.paymentStatus === paymentStatus);
   }, [report, search, fromDate, toDate, paymentStatus, ageBucket]);
 
-  // Totals follow the filters, so they always match the rows on screen.
-  const totals = useMemo(() => sumRows(visibleRows), [visibleRows]);
+  const groups = useMemo(() => groupByPO(visibleBills), [visibleBills]);
+
+  // Grand total follows the filters, so it always matches what is on screen.
+  const grand = useMemo(
+    () => ({ ...sumOf(visibleBills), billCount: visibleBills.length }),
+    [visibleBills]
+  );
 
   function handleExportExcel() {
     if (!report) return;
-    exportToExcel(totals, visibleRows);
+    exportToExcel(groups, grand);
   }
 
   async function handleExportPdf() {
     if (!report) return;
     setExportingPdf(true);
     try {
-      await exportToPDF(totals, visibleRows);
+      await exportToPDF(groups, grand);
     } finally {
       setExportingPdf(false);
     }
@@ -256,7 +281,12 @@ export default function PendingPayments() {
   }
 
   const hasFilters =
-    search || fromDate || toDate || paymentStatus !== "all" || ageBucket !== "all" || group !== "all";
+    search ||
+    fromDate ||
+    toDate ||
+    paymentStatus !== "all" ||
+    ageBucket !== "all" ||
+    group !== "all";
 
   return (
     <div className="pending-page">
@@ -264,7 +294,7 @@ export default function PendingPayments() {
         <TitleBlock
           docType="PENDING PAYMENTS"
           fields={[
-            { label: "POs Pending", value: report ? combineByPO(report.rows).length : "—" },
+            { label: "Pending Bills", value: report ? report.rows.length : "—" },
             { label: "Generated", value: new Date().toLocaleDateString("en-GB") },
           ]}
         />
@@ -299,7 +329,7 @@ export default function PendingPayments() {
           <Search size={15} className="text-muted" />
           <input
             type="text"
-            placeholder="Search PO code or bill no.…"
+            placeholder="Search bill no. or PO code…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -361,9 +391,8 @@ export default function PendingPayments() {
           <table className="ledger-table">
             <thead>
               <tr>
-                <th>PO</th>
-                <th className="text-right">Pending Bills</th>
-                <th>Oldest Bill</th>
+                <th>Bill No.</th>
+                <th>Bill Date</th>
                 <th className="text-right">Net Recv.</th>
                 <th className="text-right">Paid</th>
                 <th className="text-right">Balance</th>
@@ -372,43 +401,80 @@ export default function PendingPayments() {
               </tr>
             </thead>
             <tbody>
-              {visibleRows.map((r) => (
-                <tr
-                  key={r.poId}
-                  className="pending-row"
-                  onClick={() => navigate(`/po/${r.poId}`)}
-                >
-                  <td className="text-rivet">{r.poCode}</td>
-                  <td className="text-right tabular">{r.billCount}</td>
-                  <td>{fmtDate(r.oldestBillDate)}</td>
-                  <td className="text-right tabular text-rivet2">
-                    {fmtNum(r.netReceivable, 0)}
-                  </td>
-                  <td className="text-right tabular">{fmtNum(r.paymentReceived, 0)}</td>
-                  <td className="text-right tabular text-warn">
-                    {fmtNum(r.balanceToReceive, 0)}
-                  </td>
-                  <td className={`text-right tabular pending-days ${ageClass(r.daysDue)}`}>
-                    {r.daysDue ?? "-"}
-                  </td>
-                  <td>
-                    <span className={`pending-badge pay-${r.paymentStatus}`}>
-                      {PAYMENT_STATUS_LABELS[r.paymentStatus]}
-                    </span>
-                  </td>
-                </tr>
+              {groups.map((g) => (
+                <Fragment key={g.poId}>
+                  {/* 1. PO heading */}
+                  <tr style={poRowStyle} onClick={() => navigate(`/po/${g.poId}`)}>
+                    <td colSpan={COLS} className="text-rivet">
+                      PO: {g.poCode}
+                    </td>
+                  </tr>
+
+                  {/* 2. Pending bills of this PO */}
+                  {g.bills.map((b) => (
+                    <tr
+                      key={`${b.poId}-${b.billNo}-${b.billDate}`}
+                      className="pending-row"
+                      onClick={() => navigate(`/po/${b.poId}`)}
+                    >
+                      <td className="text-rivet">{b.billNo}</td>
+                      <td>{fmtDate(b.billDate)}</td>
+                      <td className="text-right tabular text-rivet2">
+                        {fmtNum(b.netReceivable, 0)}
+                      </td>
+                      <td className="text-right tabular">
+                        {fmtNum(b.paymentReceived, 0)}
+                      </td>
+                      <td className="text-right tabular text-warn">
+                        {fmtNum(b.balanceToReceive, 0)}
+                      </td>
+                      <td
+                        className={`text-right tabular pending-days ${ageClass(b.daysDue)}`}
+                      >
+                        {b.daysDue ?? "-"}
+                      </td>
+                      <td>
+                        <span className={`pending-badge pay-${b.paymentStatus}`}>
+                          {PAYMENT_STATUS_LABELS[b.paymentStatus]}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {/* 3. Total for this PO */}
+                  <tr style={totalRowStyle}>
+                    <td>Total – {g.poCode}</td>
+                    <td>
+                      {g.total.billCount} bill{g.total.billCount === 1 ? "" : "s"}
+                    </td>
+                    <td className="text-right tabular text-rivet2">
+                      {fmtNum(g.total.netReceivable, 0)}
+                    </td>
+                    <td className="text-right tabular">
+                      {fmtNum(g.total.paymentReceived, 0)}
+                    </td>
+                    <td className="text-right tabular text-warn">
+                      {fmtNum(g.total.balanceToReceive, 0)}
+                    </td>
+                    <td></td>
+                    <td></td>
+                  </tr>
+                </Fragment>
               ))}
             </tbody>
+
+            {/* Grand total across every PO shown */}
             <tfoot>
               <tr>
-                <td>Total Pending</td>
-                <td className="text-right tabular">{totals.billCount}</td>
-                <td></td>
-                <td className="text-right tabular text-rivet2">
-                  {fmtINR(totals.netReceivable)}
+                <td>Grand Total</td>
+                <td>
+                  {grand.billCount} bill{grand.billCount === 1 ? "" : "s"}
                 </td>
-                <td className="text-right tabular">{fmtINR(totals.paymentReceived)}</td>
-                <td className="text-right tabular">{fmtINR(totals.balanceToReceive)}</td>
+                <td className="text-right tabular text-rivet2">
+                  {fmtINR(grand.netReceivable)}
+                </td>
+                <td className="text-right tabular">{fmtINR(grand.paymentReceived)}</td>
+                <td className="text-right tabular">{fmtINR(grand.balanceToReceive)}</td>
                 <td></td>
                 <td></td>
               </tr>
@@ -417,11 +483,11 @@ export default function PendingPayments() {
         </div>
       )}
 
-      {!loading && report && visibleRows.length === 0 && (
+      {!loading && report && groups.length === 0 && (
         <div className="empty-state" style={{ marginTop: "1.5rem" }}>
           {report.rows.length === 0
             ? "No pending payments — every bill is settled."
-            : "No pending payments match your filters."}
+            : "No pending bills match your filters."}
         </div>
       )}
     </div>
