@@ -142,7 +142,7 @@
 .powise-badge.qty-not-started,
 .powise-badge.qty-no-items,
 .powise-badge.pay-unpaid,
-.powise-badge.pay-no-invoices {
+.powise-badge.pay-not-started {
   color: var(--color-warn);
   border-color: var(--color-warn);
 }

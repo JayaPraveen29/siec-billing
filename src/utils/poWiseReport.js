@@ -38,7 +38,7 @@ export function computePOWiseReport(poSheets) {
 
     const paymentStatus =
       invoices.length === 0
-        ? "no-invoices"
+        ? "not-started"
         : totals.balanceToReceive <= MONEY_EPSILON
         ? "fully-paid"
         : totals.paymentReceived <= MONEY_EPSILON
@@ -113,7 +113,7 @@ export const PAYMENT_STATUS_LABELS = {
   "fully-paid": "Fully Paid",
   "partially-paid": "Partially Paid",
   unpaid: "Unpaid",
-  "no-invoices": "No Invoices",
+  "not-started": "Not Started",
 };
 
 /**

@@ -8,6 +8,7 @@ import {
   ClipboardList,
   CalendarRange,
   Receipt,
+  Hourglass,
   ListTree,
   ChevronDown,
 } from "lucide-react";
@@ -18,6 +19,7 @@ const REPORT_PATHS = [
   "/reports/po-wise",
   "/reports/po-item-wise",
   "/reports/bill-wise",
+  "/reports/pending-payments",
   "/reports/date-wise",
 ];
 
@@ -118,6 +120,15 @@ export default function Sidebar() {
             >
               <Receipt size={15} />
               Bill Wise Report
+            </NavLink>
+            <NavLink
+              to="/reports/pending-payments"
+              className={({ isActive }) =>
+                `sidebar-link sidebar-sublink${isActive ? " active" : ""}`
+              }
+            >
+              <Hourglass size={15} />
+              Pending Payments
             </NavLink>
           </div>
         )}

@@ -32,6 +32,7 @@ const PAYMENT_FILTERS = [
   { value: "fully-paid", label: "Fully Paid" },
   { value: "partially-paid", label: "Partially Paid" },
   { value: "unpaid", label: "Unpaid" },
+  { value: "not-started", label: "Not Started" },
 ];
 
 export default function POWiseReport() {
