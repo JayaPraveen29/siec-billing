@@ -16,13 +16,7 @@ import "./MaterialAdvanceReport.css";
 // ---------------------------------------------------------------------------
 // Exports (kept in this file so only one file needs to change)
 // ---------------------------------------------------------------------------
-const EXPORT_HEADERS = [
-  "PO",
-  "Opening Mat. Adv.",
-  "Mat. Adv. Recovered",
-  "Bala. Mat. Adv.",
-  "Net Recv.",
-];
+const exportHeaders = (advLabel) => ["PO", advLabel, "Bala. Mat. Adv."];
 
 function stamp() {
   return new Date().toISOString().slice(0, 10);
@@ -31,36 +25,32 @@ function stamp() {
 function exportRow(r) {
   return [
     r.poCode,
-    fmtNum(r.openingAdvance, 0),
     fmtNum(r.recovered, 0),
     fmtNum(r.balanceAdvance, 0),
-    fmtNum(r.netReceivable, 0),
   ];
 }
 
 function exportTotal(t) {
   return [
     "Grand Total",
-    fmtNum(t.openingAdvance, 0),
     fmtNum(t.recovered, 0),
     fmtNum(t.balanceAdvance, 0),
-    fmtNum(t.netReceivable, 0),
   ];
 }
 
-function exportToExcel(totals, rows) {
+function exportToExcel(totals, rows, advLabel) {
   const ws = XLSX.utils.aoa_to_sheet([
-    EXPORT_HEADERS,
+    exportHeaders(advLabel),
     ...rows.map(exportRow),
     exportTotal(totals),
   ]);
-  ws["!cols"] = [{ wch: 16 }, { wch: 18 }, { wch: 20 }, { wch: 16 }, { wch: 14 }];
+  ws["!cols"] = [{ wch: 16 }, { wch: 26 }, { wch: 16 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Material Advance");
   XLSX.writeFile(wb, `Material-Advance-Report-${stamp()}.xlsx`);
 }
 
-async function exportToPDF(totals, rows) {
+async function exportToPDF(totals, rows, advLabel) {
   const { default: jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
@@ -70,7 +60,7 @@ async function exportToPDF(totals, rows) {
   doc.setFontSize(9);
   doc.text(`POs: ${rows.length}`, 40, 58);
   autoTable(doc, {
-    head: [EXPORT_HEADERS],
+    head: [exportHeaders(advLabel)],
     body: rows.map((r) => exportRow(r).map((v) => String(v))),
     foot: [exportTotal(totals)],
     startY: 72,
@@ -91,8 +81,6 @@ async function exportToPDF(totals, rows) {
     columnStyles: {
       1: { halign: "right" },
       2: { halign: "right" },
-      3: { halign: "right" },
-      4: { halign: "right" },
     },
   });
   doc.save(`Material-Advance-Report-${stamp()}.pdf`);
@@ -142,19 +130,32 @@ export default function MaterialAdvanceReport() {
     return filterMaterialAdvanceRows(report.rows, { search, status });
   }, [report, search, status]);
 
+  // Column heading, e.g. "Material Advance @ 20%". If the POs shown use
+  // different percentages, fall back to a plain "Material Advance".
+  const advLabel = useMemo(() => {
+    const pcts = new Set(
+      (allData || [])
+        .filter((d) => group === "all" || d.po.group === group)
+        .map((d) => Number(d.po.matAdvPercent) || 0)
+    );
+    return pcts.size === 1
+      ? `Material Advance @ ${[...pcts][0]}%`
+      : "Material Advance";
+  }, [allData, group]);
+
   // Grand total follows the filters, so it always matches the rows on screen.
   const totals = useMemo(() => sumMaterialAdvanceRows(visibleRows), [visibleRows]);
 
   function handleExportExcel() {
     if (!report) return;
-    exportToExcel(totals, visibleRows);
+    exportToExcel(totals, visibleRows, advLabel);
   }
 
   async function handleExportPdf() {
     if (!report) return;
     setExportingPdf(true);
     try {
-      await exportToPDF(totals, visibleRows);
+      await exportToPDF(totals, visibleRows, advLabel);
     } finally {
       setExportingPdf(false);
     }
@@ -242,10 +243,8 @@ export default function MaterialAdvanceReport() {
             <thead>
               <tr>
                 <th>PO</th>
-                <th className="text-right">Opening Mat. Adv.</th>
-                <th className="text-right">Mat. Adv. Recovered</th>
+                <th className="text-right">{advLabel}</th>
                 <th className="text-right">Bala. Mat. Adv.</th>
-                <th className="text-right">Net Recv.</th>
               </tr>
             </thead>
             <tbody>
@@ -256,7 +255,6 @@ export default function MaterialAdvanceReport() {
                   onClick={() => navigate(`/po/${r.poId}`)}
                 >
                   <td className="text-rivet">{r.poCode}</td>
-                  <td className="text-right tabular">{fmtNum(r.openingAdvance, 0)}</td>
                   <td className="text-right tabular">{fmtNum(r.recovered, 0)}</td>
                   <td
                     className={`text-right tabular ${
@@ -270,21 +268,14 @@ export default function MaterialAdvanceReport() {
                   >
                     {fmtNum(r.balanceAdvance, 0)}
                   </td>
-                  <td className="text-right tabular text-rivet2">
-                    {fmtNum(r.netReceivable, 0)}
-                  </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr>
                 <td>Grand Total</td>
-                <td className="text-right tabular">{fmtINR(totals.openingAdvance)}</td>
                 <td className="text-right tabular">{fmtINR(totals.recovered)}</td>
                 <td className="text-right tabular">{fmtINR(totals.balanceAdvance)}</td>
-                <td className="text-right tabular text-rivet2">
-                  {fmtINR(totals.netReceivable)}
-                </td>
               </tr>
             </tfoot>
           </table>
