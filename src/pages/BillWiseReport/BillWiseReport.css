@@ -189,11 +189,61 @@
 
 @media (max-width: 640px) {
   .billwise-page {
-    padding: 1.25rem;
+    padding: 1rem;
+  }
+
+  .billwise-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .billwise-actions {
+    width: 100%;
+  }
+
+  .billwise-actions button {
+    flex: 1 1 0;
+    justify-content: center;
   }
 
   .billwise-controls {
     flex-direction: column;
     align-items: stretch;
+    gap: 0.6rem;
+  }
+
+  /* The desktop rule uses flex-basis: 14rem, which becomes a 14rem HEIGHT
+     once the controls stack in a column. Reset it. */
+  .billwise-search {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .billwise-date-range {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .billwise-date-range label {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  .billwise-date-range input[type="date"] {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .billwise-controls select,
+  .billwise-clear {
+    width: 100%;
+    box-sizing: border-box;
   }
 }
