@@ -272,10 +272,10 @@ export default function POSheet() {
     return map;
   }, [ledger]);
 
-  // When no invoices exist yet, the summary rows would otherwise be blank.
-  // Show what the whole PO is worth (total weight x PO rates) so Unit Rate,
-  // Basic Value, GST, Round Off, Total Invoice Value, Material Advance, etc.
-  // are still calculated. Mirrors the per-invoice maths in ledger.js.
+  // What the whole PO is worth (total weight x PO rates). This is shown in the
+  // PO-level "Wt./Kg" column of the summary rows at all times, so it stays
+  // stable whether or not invoices exist. Mirrors the per-invoice maths in
+  // ledger.js.
   const poProjection = useMemo(() => {
     if (!po || !ledger) return null;
     const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
@@ -617,7 +617,9 @@ export default function POSheet() {
             )}
 
             {/* Invoice financial summary rows: Unit Rate through Bal to be received,
-                one column per invoice (same columns as the item matrix above). */}
+                one column per invoice (same columns as the item matrix above).
+                - "Wt./Kg" column  = whole-PO value (total weight x PO rates), always.
+                - "Bala/Total" col = sum of the invoice columns (or running/unpaid value). */}
             {ledger.itemRows.length > 0 && (
               <tbody className="po-summary-rows">
                 <tr className="po-summary-row-bold">
@@ -639,13 +641,19 @@ export default function POSheet() {
                   <td></td>
                 </tr>
                 {SUMMARY_ROW_DEFS.map((def) => {
-                  let rowTotal = null;
                   const noInvoices = sortedInvoicesForMatrix.length === 0;
+
+                  // rowTotal     -> sum across the invoice columns (Bala/Total column)
+                  // poLevelTotal -> whole-PO projection (Wt./Kg column), rows 2-8 only
+                  let rowTotal = null;
+                  let poLevelTotal = null;
+
                   if (def.no !== 1 && !def.isDate) {
+                    poLevelTotal =
+                      def.no <= 8 ? Number(def.getVal(poProjection)) || 0 : 0;
+
                     if (noInvoices) {
-                      // Projected PO-level value (rows 1-8 only; running
-                      // balance / payment rows have nothing to show yet).
-                      rowTotal = def.no <= 8 ? Number(def.getVal(poProjection)) || 0 : 0;
+                      rowTotal = 0;
                     } else if (def.totalMode === "last") {
                       const lastInv =
                         sortedInvoicesForMatrix[sortedInvoicesForMatrix.length - 1];
@@ -676,8 +684,8 @@ export default function POSheet() {
                           ? fmtNum(po.unitRate, 2)
                           : def.isDate
                           ? "-"
-                          : rowTotal
-                          ? fmtNum(rowTotal, def.decimals ?? 0)
+                          : poLevelTotal
+                          ? fmtNum(poLevelTotal, def.decimals ?? 0)
                           : "-"}
                       </td>
                       {sortedInvoicesForMatrix.map((inv) => {
