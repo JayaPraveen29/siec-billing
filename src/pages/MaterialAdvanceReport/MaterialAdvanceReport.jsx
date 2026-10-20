@@ -120,9 +120,29 @@ export default function MaterialAdvanceReport() {
 
   const report = useMemo(() => {
     if (!allData) return null;
-    return computeMaterialAdvanceReport(
-      allData.filter((d) => group === "all" || d.po.group === group)
-    );
+    const filtered = allData.filter((d) => group === "all" || d.po.group === group);
+    const base = computeMaterialAdvanceReport(filtered);
+
+    // Where nothing has been deducted through invoices yet (no invoices, or
+    // none with quantity billed), show the Material Advance for the whole PO
+    // instead of 0: total item weight x unit rate x Material Advance %.
+    // Same figure as "Material Advance @ x%" on the PO sheet page.
+    const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+    const projectedById = {};
+    filtered.forEach(({ po, items }) => {
+      const weight = (items || []).reduce((sum, it) => sum + n(it.weightKg), 0);
+      projectedById[po.id] = Math.round(
+        weight * n(po.unitRate) * (n(po.matAdvPercent) / 100)
+      );
+    });
+    return {
+      ...base,
+      rows: base.rows.map((r) =>
+        Math.abs(r.recovered) > 0
+          ? r
+          : { ...r, recovered: projectedById[r.poId] || 0 }
+      ),
+    };
   }, [allData, group]);
 
   const visibleRows = useMemo(() => {
