@@ -16,7 +16,10 @@ import "./MaterialAdvanceReport.css";
 // ---------------------------------------------------------------------------
 // Exports (kept in this file so only one file needs to change)
 // ---------------------------------------------------------------------------
-const exportHeaders = (advLabel) => ["PO", advLabel, "Bala. Mat. Adv."];
+const exportHeaders = (advLabel) => ["PO", advLabel, "Adjusted", "Bala. Mat. Adv."];
+
+// Bala. Mat. Adv. = Material Advance (1st value column) - Adjusted (2nd).
+const balaMatAdv = (r) => (r.recovered || 0) + (r.balanceAdvance || 0);
 
 function stamp() {
   return new Date().toISOString().slice(0, 10);
@@ -27,6 +30,7 @@ function exportRow(r) {
     r.poCode,
     fmtNum(r.recovered, 0),
     fmtNum(r.balanceAdvance, 0),
+    fmtNum(balaMatAdv(r), 0),
   ];
 }
 
@@ -35,6 +39,7 @@ function exportTotal(t) {
     "Grand Total",
     fmtNum(t.recovered, 0),
     fmtNum(t.balanceAdvance, 0),
+    fmtNum(balaMatAdv(t), 0),
   ];
 }
 
@@ -44,7 +49,7 @@ function exportToExcel(totals, rows, advLabel) {
     ...rows.map(exportRow),
     exportTotal(totals),
   ]);
-  ws["!cols"] = [{ wch: 16 }, { wch: 26 }, { wch: 16 }];
+  ws["!cols"] = [{ wch: 16 }, { wch: 26 }, { wch: 16 }, { wch: 18 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Material Advance");
   XLSX.writeFile(wb, `Material-Advance-Report-${stamp()}.xlsx`);
@@ -81,6 +86,7 @@ async function exportToPDF(totals, rows, advLabel) {
     columnStyles: {
       1: { halign: "right" },
       2: { halign: "right" },
+      3: { halign: "right" },
     },
   });
   doc.save(`Material-Advance-Report-${stamp()}.pdf`);
@@ -264,6 +270,7 @@ export default function MaterialAdvanceReport() {
               <tr>
                 <th>PO</th>
                 <th className="text-right">{advLabel}</th>
+                <th className="text-right">Adjusted</th>
                 <th className="text-right">Bala. Mat. Adv.</th>
               </tr>
             </thead>
@@ -288,6 +295,14 @@ export default function MaterialAdvanceReport() {
                   >
                     {fmtNum(r.balanceAdvance, 0)}
                   </td>
+                  <td
+                    className={`text-right tabular ${
+                      balaMatAdv(r) < -0.5 ? "text-warn" : ""
+                    }`}
+                    style={{ fontWeight: 600 }}
+                  >
+                    {fmtNum(balaMatAdv(r), 0)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -296,6 +311,7 @@ export default function MaterialAdvanceReport() {
                 <td>Grand Total</td>
                 <td className="text-right tabular">{fmtINR(totals.recovered)}</td>
                 <td className="text-right tabular">{fmtINR(totals.balanceAdvance)}</td>
+                <td className="text-right tabular">{fmtINR(balaMatAdv(totals))}</td>
               </tr>
             </tfoot>
           </table>
