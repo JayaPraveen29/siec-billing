@@ -7,7 +7,7 @@ import {
   filterBillWiseRows,
   PAYMENT_STATUS_LABELS,
 } from "../../utils/billWiseReport";
-import { fmtNum, fmtINR, fmtDate } from "../../utils/format";
+import { fmtNum, fmtINR, fmtDate , fmtToday } from "../../utils/format";
 import {
   exportBillWiseReportToExcel,
   exportBillWiseReportToPDF,
@@ -75,7 +75,7 @@ export default function BillWiseReport() {
     if (!report) return;
     setExportingPdf(true);
     try {
-      await exportBillWiseReportToPDF(report, visibleRows);
+      await exportBillWiseReportToPDF(report, visibleRows, { company: group });
     } finally {
       setExportingPdf(false);
     }
@@ -96,7 +96,7 @@ export default function BillWiseReport() {
           docType="BILL WISE REPORT"
           fields={[
             { label: "Bills", value: report ? report.rows.length : "—" },
-            { label: "Generated", value: new Date().toLocaleDateString("en-GB") },
+            { label: "Generated", value: fmtToday() },
           ]}
         />
         <div className="billwise-actions">

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarRange, RefreshCw, FileSpreadsheet, FileText } from "lucide-react";
 import { fetchAllPOData } from "../../services/poService";
 import { computeDateWiseReport } from "../../utils/dateWiseReport";
-import { fmtNum, fmtINR, fmtDate } from "../../utils/format";
+import { fmtNum, fmtINR, fmtDate , fmtToday } from "../../utils/format";
 import {
   exportDateWiseReportToExcel,
   exportDateWiseReportToPDF,
@@ -67,7 +67,7 @@ export default function DateWiseReport() {
     if (!report) return;
     setExportingPdf(true);
     try {
-      await exportDateWiseReportToPDF(report, { dateLabel: activeTab.label });
+      await exportDateWiseReportToPDF(report, { dateLabel: activeTab.label, company: group });
     } finally {
       setExportingPdf(false);
     }
@@ -80,7 +80,7 @@ export default function DateWiseReport() {
           docType="DATE WISE REPORT"
           fields={[
             { label: "Days", value: report ? report.days.length : "—" },
-            { label: "Generated", value: new Date().toLocaleDateString("en-GB") },
+            { label: "Generated", value: fmtToday() },
           ]}
         />
         <div className="datewise-actions">

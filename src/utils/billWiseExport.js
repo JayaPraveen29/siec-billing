@@ -3,7 +3,7 @@
 // BillWiseReport.jsx — Excel via SheetJS (xlsx), PDF via jspdf + jspdf-autotable.
 
 import * as XLSX from "xlsx";
-import { fmtNum, fmtDate } from "./format";
+import { fmtNum, fmtDate, drawPdfCompany } from "./format";
 import { PAYMENT_STATUS_LABELS } from "./billWiseReport";
 
 const HEADERS = [
@@ -100,7 +100,7 @@ export function exportBillWiseReportToExcel(
 export async function exportBillWiseReportToPDF(
   report,
   rows,
-  { filename = `Bill-Wise-Report-${stamp()}.pdf` } = {}
+  { company, filename = `Bill-Wise-Report-${stamp()}.pdf` } = {}
 ) {
   if (!report) return;
 
@@ -108,6 +108,7 @@ export async function exportBillWiseReportToPDF(
   const autoTable = (await import("jspdf-autotable")).default;
 
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  drawPdfCompany(doc, company);
 
   doc.setFontSize(11);
   doc.setFont(undefined, "normal");

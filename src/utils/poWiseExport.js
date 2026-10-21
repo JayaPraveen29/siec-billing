@@ -3,7 +3,7 @@
 // PDF via jspdf + jspdf-autotable.
 
 import * as XLSX from "xlsx";
-import { fmtNum } from "./format";
+import { fmtNum, drawPdfCompany } from "./format";
 import { QTY_STATUS_LABELS, PAYMENT_STATUS_LABELS } from "./poWiseReport";
 
 const HEADERS = [
@@ -120,7 +120,7 @@ export function exportPOWiseReportToExcel(
 export async function exportPOWiseReportToPDF(
   report,
   rows,
-  { filename = `PO-Wise-Report-${stamp()}.pdf` } = {}
+  { company, filename = `PO-Wise-Report-${stamp()}.pdf` } = {}
 ) {
   if (!report) return;
 
@@ -128,6 +128,7 @@ export async function exportPOWiseReportToPDF(
   const autoTable = (await import("jspdf-autotable")).default;
 
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  drawPdfCompany(doc, company);
 
   doc.setFontSize(11);
   doc.setFont(undefined, "normal");

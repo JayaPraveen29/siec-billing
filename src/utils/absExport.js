@@ -7,7 +7,7 @@
 //   npm install jspdf jspdf-autotable
 
 import * as XLSX from "xlsx";
-import { fmtNum, fmtDate } from "./format";
+import { fmtNum, fmtDate, drawPdfCompany } from "./format";
 
 const HEADERS = [
   "PO",
@@ -130,7 +130,7 @@ export function exportABSReportToExcel(report, filename = `ABS-Report-${stamp()}
 
 export async function exportABSReportToPDF(
   report,
-  { filename = `ABS-Report-${stamp()}.pdf` } = {}
+  { company, filename = `ABS-Report-${stamp()}.pdf` } = {}
 ) {
   if (!report) return;
 
@@ -138,6 +138,7 @@ export async function exportABSReportToPDF(
   const autoTable = (await import("jspdf-autotable")).default;
 
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  drawPdfCompany(doc, company);
 
   const pageWidth = doc.internal.pageSize.getWidth();
 

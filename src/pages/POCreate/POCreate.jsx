@@ -13,6 +13,7 @@ const PO_GROUPS = ["SIEC", "ST"];
 const emptyForm = {
   poNumber: "",
   group: "",
+  projectManager: "",
   unitRate: "",
   gstPercent: "18",
   tdsPercent: "0.1",
@@ -88,6 +89,7 @@ export default function POCreate() {
         code: form.poNumber.trim(),
         poNumber: form.poNumber.trim(),
         group: form.group,
+        projectManager: form.projectManager.trim(),
         unitRate: Number(form.unitRate) || 0,
         gstPercent: Number(form.gstPercent) || 0,
         tdsPercent: Number(form.tdsPercent) || 0,
@@ -166,6 +168,15 @@ export default function POCreate() {
 
           <div className="form-row-2" style={{ marginTop: "0.75rem" }}>
             <label style={{ display: "block" }}>
+              <span className="field-label">Project Manager</span>
+              <input
+                value={form.projectManager}
+                onChange={(e) => setForm({ ...form, projectManager: e.target.value })}
+                className="input"
+                style={{ marginTop: "0.25rem" }}
+              />
+            </label>
+            <label style={{ display: "block" }}>
               <span className="field-label">Unit Rate (₹/kg)</span>
               <input
                 type="number"
@@ -176,6 +187,9 @@ export default function POCreate() {
                 style={{ marginTop: "0.25rem" }}
               />
             </label>
+          </div>
+
+          <div className="form-row-2" style={{ marginTop: "0.75rem" }}>
             <label style={{ display: "block" }}>
               <span className="field-label">Opening Mat. Advance (₹)</span>
               <input

@@ -9,7 +9,7 @@ import {
   ageClass,
   AGE_BUCKETS,
 } from "../../utils/pendingPaymentsReport";
-import { fmtNum, fmtINR, fmtDate } from "../../utils/format";
+import { fmtNum, fmtINR, fmtDate, fmtToday, drawPdfCompany } from "../../utils/format";
 import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import "./PendingPayments.css";
@@ -24,6 +24,10 @@ const PAYMENT_FILTERS = [
 ];
 
 const COLS = 6;
+
+// "PO: 123  |  PM: Name" heading text (PM only when one is set).
+const poHeading = (g) =>
+  `PO: ${g.poCode}${g.projectManager ? `  |  PM: ${g.projectManager}` : ""}`;
 
 // ---------------------------------------------------------------------------
 // Group the (already filtered) pending bills by PO:
@@ -45,7 +49,13 @@ function sumOf(bills) {
 function groupByPO(bills) {
   const map = new Map();
   bills.forEach((b) => {
-    if (!map.has(b.poId)) map.set(b.poId, { poId: b.poId, poCode: b.poCode, bills: [] });
+    if (!map.has(b.poId))
+      map.set(b.poId, {
+        poId: b.poId,
+        poCode: b.poCode,
+        projectManager: b.projectManager || "",
+        bills: [],
+      });
     map.get(b.poId).bills.push(b);
   });
   const groups = [...map.values()].map((g) => {
@@ -77,7 +87,7 @@ const EXPORT_HEADERS = [
 function buildExportRows(groups, grand) {
   const out = [];
   groups.forEach((g) => {
-    out.push({ kind: "po", cells: [`PO: ${g.poCode}`, "", "", "", "", ""] });
+    out.push({ kind: "po", cells: [poHeading(g), "", "", "", "", ""] });
     g.bills.forEach((b) =>
       out.push({
         kind: "bill",
@@ -94,7 +104,7 @@ function buildExportRows(groups, grand) {
     out.push({
       kind: "total",
       cells: [
-        `Total – ${g.poCode}`,
+        "Total",
         "",
         fmtNum(g.total.netReceivable, 0),
         fmtNum(g.total.paymentReceived, 0),
@@ -137,12 +147,13 @@ function exportToExcel(groups, grand) {
   XLSX.writeFile(wb, `Pending-Payments-${stamp()}.xlsx`);
 }
 
-async function exportToPDF(groups, grand) {
+async function exportToPDF(groups, grand, company) {
   const { default: jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
   const rows = buildExportRows(groups, grand);
 
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  drawPdfCompany(doc, company);
   doc.setFontSize(11);
   doc.setFont(undefined, "normal");
   doc.text("Pending Payments Report", 40, 40);
@@ -259,7 +270,7 @@ export default function PendingPayments() {
     if (!report) return;
     setExportingPdf(true);
     try {
-      await exportToPDF(groups, grand);
+      await exportToPDF(groups, grand, group);
     } finally {
       setExportingPdf(false);
     }
@@ -289,7 +300,7 @@ export default function PendingPayments() {
           docType="PENDING PAYMENTS"
           fields={[
             { label: "POs", value: report ? new Set(report.rows.map((r) => r.poId)).size : "—" },
-            { label: "Generated", value: new Date().toLocaleDateString("en-GB") },
+            { label: "Generated", value: fmtToday() },
           ]}
         />
         <div className="pending-actions">
@@ -399,7 +410,7 @@ export default function PendingPayments() {
                   {/* 1. PO heading */}
                   <tr style={poRowStyle} onClick={() => navigate(`/po/${g.poId}`)}>
                     <td colSpan={COLS} className="text-rivet">
-                      PO: {g.poCode}
+                      {poHeading(g)}
                     </td>
                   </tr>
 
@@ -431,7 +442,7 @@ export default function PendingPayments() {
 
                   {/* 3. Total for this PO */}
                   <tr style={totalRowStyle}>
-                    <td>Total – {g.poCode}</td>
+                    <td>Total</td>
                     <td></td>
                     <td className="text-right tabular text-rivet2">
                       {fmtNum(g.total.netReceivable, 0)}

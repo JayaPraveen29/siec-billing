@@ -1,7 +1,7 @@
 // Export helpers for the PO Item Wise Report (Excel via xlsx, PDF via jspdf).
 
 import * as XLSX from "xlsx";
-import { fmtNum, fmtDate } from "./format";
+import { fmtNum, fmtDate, drawPdfCompany } from "./format";
 import { ITEM_STATUS_LABELS } from "./poItemWiseReport";
 
 function stamp() {
@@ -72,12 +72,13 @@ export function exportPOItemWiseToExcel(report, filename = `PO-Item-Wise-Report-
   XLSX.writeFile(wb, filename);
 }
 
-export async function exportPOItemWiseToPDF(report, { filename = `PO-Item-Wise-Report-${stamp()}.pdf` } = {}) {
+export async function exportPOItemWiseToPDF(report, { company, filename = `PO-Item-Wise-Report-${stamp()}.pdf` } = {}) {
   if (!report || report.groups.length === 0) return;
 
   const { default: jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  drawPdfCompany(doc, company);
 
   doc.setFontSize(11);
   doc.text("PO Item Wise Report", 40, 40);

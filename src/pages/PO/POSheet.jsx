@@ -162,7 +162,7 @@ export default function POSheet() {
   function startEditingPaymentDate(inv) {
     setPaymentDateDrafts((prev) => ({
       ...prev,
-      [inv.id]: inv.paymentDate || "",
+      [inv.id]: isoToDdmmyy(inv.paymentDate || ""),
     }));
     setEditingPaymentDateId(inv.id);
   }
@@ -176,16 +176,21 @@ export default function POSheet() {
     setEditingPaymentDateId(null);
   }
 
-  function handlePaymentDateDraftChange(invoiceId, isoValue) {
+  function handlePaymentDateDraftChange(invoiceId, rawValue) {
     setPaymentDateDrafts((prev) => ({
       ...prev,
-      [invoiceId]: isoValue,
+      [invoiceId]: formatDdmmyyInput(rawValue),
     }));
   }
 
   async function handlePaymentDateSave(invoiceId) {
-    const iso = paymentDateDrafts[invoiceId] || "";
-    await updateInvoice(id, invoiceId, { paymentDate: iso });
+    const text = (paymentDateDrafts[invoiceId] || "").trim();
+    // Empty clears the date; a valid DD-MM-YY is stored as ISO; anything
+    // else is ignored (the old value is kept).
+    const iso = text === "" ? "" : ddmmyyToIso(text);
+    if (iso !== null) {
+      await updateInvoice(id, invoiceId, { paymentDate: iso });
+    }
     setPaymentDateDrafts((prev) => {
       const next = { ...prev };
       delete next[invoiceId];
@@ -419,6 +424,7 @@ export default function POSheet() {
           fields={[
             { label: "PO No.", value: po.poNumber },
             { label: "Group", value: po.group || "—" },
+            { label: "Project Manager", value: po.projectManager || "—" },
             { label: "Sheet Code", value: po.code },
             { label: "Unit Rate", value: `₹${fmtNum(po.unitRate, 2)}/kg` },
             { label: "GST", value: `${po.gstPercent}%` },
@@ -795,7 +801,10 @@ export default function POSheet() {
                               <td key={inv.id} className="text-right tabular">
                                 <input
                                   autoFocus
-                                  type="date"
+                                  type="text"
+                                  inputMode="numeric"
+                                  placeholder="DD-MM-YY"
+                                  maxLength={8}
                                   value={value}
                                   onChange={(e) =>
                                     handlePaymentDateDraftChange(inv.id, e.target.value)
@@ -806,7 +815,7 @@ export default function POSheet() {
                                     if (e.key === "Escape") cancelEditingPaymentDate(inv.id);
                                   }}
                                   className="input po-unit-rate-input po-date-input"
-                                  title="Pick the payment date, or clear it"
+                                  title="Type the payment date as DD-MM-YY, or clear it"
                                 />
                               </td>
                             );
@@ -817,7 +826,7 @@ export default function POSheet() {
                               key={inv.id}
                               className="text-right tabular po-unit-rate-display"
                               onDoubleClick={() => startEditingPaymentDate(inv)}
-                              title="Double-click to pick a date"
+                              title="Double-click to enter a date (DD-MM-YY)"
                             >
                               {inv.paymentDate ? fmtDate(inv.paymentDate) : "-"}
                             </td>
@@ -959,6 +968,7 @@ function PoSettingsModal({ po, onCancel, onSave }) {
   const [form, setForm] = useState({
     poNumber: po.poNumber ?? "",
     group: po.group ?? "",
+    projectManager: po.projectManager ?? "",
     unitRate: po.unitRate ?? "",
     gstPercent: po.gstPercent ?? "",
     tdsPercent: po.tdsPercent ?? "",
@@ -974,6 +984,7 @@ function PoSettingsModal({ po, onCancel, onSave }) {
       await onSave({
         poNumber: form.poNumber.trim(),
         group: form.group,
+        projectManager: form.projectManager.trim(),
         unitRate: Number(form.unitRate) || 0,
         gstPercent: Number(form.gstPercent) || 0,
         tdsPercent: Number(form.tdsPercent) || 0,
@@ -1016,6 +1027,16 @@ function PoSettingsModal({ po, onCancel, onSave }) {
               </option>
             ))}
           </select>
+        </label>
+
+        <label style={{ display: "block", marginBottom: "0.75rem" }}>
+          <span className="field-label">Project Manager</span>
+          <input
+            value={form.projectManager}
+            onChange={(e) => setForm({ ...form, projectManager: e.target.value })}
+            className="input"
+            style={{ marginTop: "0.25rem" }}
+          />
         </label>
 
         <label style={{ display: "block" }}>
@@ -1316,7 +1337,7 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
 
     const isoInvoiceDate = ddmmyyToIso(invoiceDateText);
     if (!isoInvoiceDate) {
-      setInvoiceDateError("Enter date as DD-MM-YY, e.g. DD-MM-YY");
+      setInvoiceDateError("Enter date as DD-MM-YY, e.g. 21-10-26");
       return;
     }
 

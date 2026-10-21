@@ -2,7 +2,7 @@
 // Columns match the on-screen table in MaterialAdvanceReport.jsx.
 
 import * as XLSX from "xlsx";
-import { fmtNum } from "./format";
+import { fmtNum, drawPdfCompany } from "./format";
 import { STATUS_LABELS } from "./materialAdvanceReport";
 
 const HEADERS = [
@@ -90,12 +90,13 @@ export function exportMaterialAdvanceToExcel(
 export async function exportMaterialAdvanceToPDF(
   totals,
   rows,
-  { filename = `Material-Advance-Report-${stamp()}.pdf` } = {}
+  { company, filename = `Material-Advance-Report-${stamp()}.pdf` } = {}
 ) {
   const { default: jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
 
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  drawPdfCompany(doc, company);
   doc.setFontSize(11);
   doc.setFont(undefined, "normal");
   doc.text("Material Advance Report", 40, 40);

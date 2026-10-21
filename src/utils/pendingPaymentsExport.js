@@ -2,7 +2,7 @@
 // Columns match the on-screen table in PendingPayments.jsx.
 
 import * as XLSX from "xlsx";
-import { fmtNum, fmtDate } from "./format";
+import { fmtNum, fmtDate, drawPdfCompany } from "./format";
 import { PAYMENT_STATUS_LABELS } from "./pendingPaymentsReport";
 
 const HEADERS = [
@@ -83,12 +83,13 @@ export function exportPendingPaymentsToExcel(
 export async function exportPendingPaymentsToPDF(
   totals,
   rows,
-  { filename = `Pending-Payments-${stamp()}.pdf` } = {}
+  { company, filename = `Pending-Payments-${stamp()}.pdf` } = {}
 ) {
   const { default: jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
 
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  drawPdfCompany(doc, company);
   doc.setFontSize(11);
   doc.setFont(undefined, "normal");
   doc.text("Pending Payments Report", 40, 40);

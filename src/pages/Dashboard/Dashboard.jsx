@@ -8,7 +8,7 @@ import {
   subscribePOSheets,
 } from "../../services/poService";
 import { computePOLedger } from "../../utils/ledger";
-import { fmtINR, fmtNum } from "../../utils/format";
+import { fmtINR, fmtNum , fmtToday } from "../../utils/format";
 import StatCard from "../../components/StatCard";
 import Loading from "../../components/Loading";
 import ConfirmDialog from "../../components/ConfirmDialog";
@@ -140,7 +140,7 @@ export default function Dashboard() {
         docType="Purchase Order Register"
         fields={[
           { label: "PO Sheets", value: visiblePOs ? visiblePOs.length : "—" },
-          { label: "Date", value: new Date().toLocaleDateString("en-GB") },
+          { label: "Date", value: fmtToday() },
         ]}
       />
 

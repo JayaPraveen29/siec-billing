@@ -8,7 +8,7 @@ import {
   QTY_STATUS_LABELS,
   PAYMENT_STATUS_LABELS,
 } from "../../utils/poWiseReport";
-import { fmtNum, fmtINR } from "../../utils/format";
+import { fmtNum, fmtINR , fmtToday } from "../../utils/format";
 import {
   exportPOWiseReportToExcel,
   exportPOWiseReportToPDF,
@@ -78,7 +78,7 @@ export default function POWiseReport() {
     if (!report) return;
     setExportingPdf(true);
     try {
-      await exportPOWiseReportToPDF(report, visibleRows);
+      await exportPOWiseReportToPDF(report, visibleRows, { company: group });
     } finally {
       setExportingPdf(false);
     }
@@ -91,7 +91,7 @@ export default function POWiseReport() {
           docType="PO WISE REPORT"
           fields={[
             { label: "POs", value: report ? report.rows.length : "—" },
-            { label: "Generated", value: new Date().toLocaleDateString("en-GB") },
+            { label: "Generated", value: fmtToday() },
           ]}
         />
         <div className="powise-actions">

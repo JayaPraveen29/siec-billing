@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, FileSpreadsheet, FileText } from "lucide-react";
 import { fetchAllPOData } from "../../services/poService";
 import { computeABSReport } from "../../utils/ledger";
-import { fmtINR, fmtNum, fmtDate } from "../../utils/format";
+import { fmtINR, fmtNum, fmtDate , fmtToday } from "../../utils/format";
 import { exportABSReportToExcel, exportABSReportToPDF } from "../../utils/absExport";
 import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
@@ -44,7 +44,7 @@ export default function ABSReport() {
     if (!report) return;
     setExportingPdf(true);
     try {
-      await exportABSReportToPDF(report);
+      await exportABSReportToPDF(report, { company: group });
     } finally {
       setExportingPdf(false);
     }
@@ -57,7 +57,7 @@ export default function ABSReport() {
           docType="Abstract of Structural Bills"
           fields={[
             { label: "PO Groups", value: report ? report.groups.length : "—" },
-            { label: "Generated", value: new Date().toLocaleDateString("en-GB") },
+            { label: "Generated", value: fmtToday() },
           ]}
         />
         <div className="abs-actions">

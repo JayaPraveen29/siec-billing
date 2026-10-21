@@ -79,6 +79,7 @@ export function computePendingPaymentsReport(poSheets) {
         poId: po.id,
         poCode: po.code,
         poNumber: po.poNumber,
+        projectManager: po.projectManager || "",
         billNo: inv.invoiceNo,
         billDate: inv.invoiceDate,
         qty: inv.qty,
@@ -136,7 +137,7 @@ export function filterPendingRows(
   const term = (search || "").trim().toLowerCase();
   return rows.filter((r) => {
     if (term) {
-      const hay = `${r.billNo} ${r.poCode} ${r.poNumber}`.toLowerCase();
+      const hay = `${r.billNo} ${r.poCode} ${r.poNumber} ${r.projectManager}`.toLowerCase();
       if (!hay.includes(term)) return false;
     }
     if (fromDate || toDate) {

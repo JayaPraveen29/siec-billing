@@ -10,7 +10,7 @@
 // on-screen table in POSheet.jsx, rather than two separate tables.
 
 import * as XLSX from "xlsx";
-import { fmtNum, fmtDate } from "./format";
+import { fmtNum, fmtDate, fmtToday, drawPdfCompany } from "./format";
 
 // Same palette as src/styles/variables.css, used to color specific
 // cells (Balance column, Net Receivable, Bal to be received) so the PDF
@@ -139,7 +139,7 @@ export function exportPOSheetToExcel(po, ledger, filename = `${po.code || "PO"}-
 
   const rows = [
     [`PO Billing Ledger — ${po.code || ""} (${po.poNumber || ""})`],
-    [`Unit Rate: ₹${fmtNum(po.unitRate, 2)}/kg   GST: ${po.gstPercent}%   Generated: ${new Date().toLocaleDateString("en-GB")}`],
+    [`Unit Rate: ₹${fmtNum(po.unitRate, 2)}/kg   GST: ${po.gstPercent}%   Generated: ${fmtToday()}`],
     [],
     header,
     ...itemRows,
@@ -193,6 +193,7 @@ export async function exportPOSheetToPDF(
   const { itemRows, totalRow, summaryHeaderRow, summaryRows, invoices } = buildMatrix(po, ledger);
 
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  drawPdfCompany(doc, po.group);
 
   doc.setFontSize(11);
   doc.setFont(undefined, "normal");

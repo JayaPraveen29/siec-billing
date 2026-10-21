@@ -8,7 +8,7 @@ import {
   listItemNames,
   ITEM_STATUS_LABELS,
 } from "../../utils/poItemWiseReport";
-import { fmtNum, fmtINR, fmtDate } from "../../utils/format";
+import { fmtNum, fmtINR, fmtDate , fmtToday } from "../../utils/format";
 import {
   exportPOItemWiseToExcel,
   exportPOItemWiseToPDF,
@@ -91,7 +91,7 @@ export default function POItemWiseReport() {
   async function handleExportPdf() {
     setExportingPdf(true);
     try {
-      await exportPOItemWiseToPDF(report);
+      await exportPOItemWiseToPDF(report, { company: group });
     } finally {
       setExportingPdf(false);
     }
@@ -105,7 +105,7 @@ export default function POItemWiseReport() {
           fields={[
             { label: "POs", value: loading ? "—" : report.groups.length },
             { label: "Items", value: loading ? "—" : itemCount },
-            { label: "Generated", value: new Date().toLocaleDateString("en-GB") },
+            { label: "Generated", value: fmtToday() },
           ]}
         />
         <div className="powise-actions">

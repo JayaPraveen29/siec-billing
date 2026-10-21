@@ -3,7 +3,7 @@
 // PDF via jspdf + jspdf-autotable.
 
 import * as XLSX from "xlsx";
-import { fmtNum, fmtDate } from "./format";
+import { fmtNum, fmtDate, drawPdfCompany } from "./format";
 
 const HEADERS = [
   "PO",
@@ -128,6 +128,7 @@ export function exportDateWiseReportToExcel(
 export async function exportDateWiseReportToPDF(
   report,
   {
+    company,
     dateLabel = "Invoice Date",
     filename = `Date-Wise-Report-${stamp()}.pdf`,
   } = {}
@@ -138,6 +139,7 @@ export async function exportDateWiseReportToPDF(
   const autoTable = (await import("jspdf-autotable")).default;
 
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  drawPdfCompany(doc, company);
 
   doc.setFontSize(11);
   doc.setFont(undefined, "normal");

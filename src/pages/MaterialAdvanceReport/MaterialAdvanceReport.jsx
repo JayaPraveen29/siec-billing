@@ -8,7 +8,7 @@ import {
   sumMaterialAdvanceRows,
 } from "../../utils/materialAdvanceReport";
 import { computePOLedger } from "../../utils/ledger";
-import { fmtNum, fmtINR } from "../../utils/format";
+import { fmtNum, fmtINR, fmtToday, drawPdfCompany } from "../../utils/format";
 import * as XLSX from "xlsx";
 import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
@@ -20,7 +20,7 @@ import "./MaterialAdvanceReport.css";
 const exportHeaders = (advLabel) => ["PO", advLabel, "Adjusted", "Bala. Mat. Adv."];
 
 // Bala. Mat. Adv. = Material Advance (1st value column) - Adjusted (2nd).
-const balaMatAdv = (r) => (r.recovered || 0) + (r.balanceAdvance || 0);
+const balaMatAdv = (r) => (r.recovered || 0) - (r.balanceAdvance || 0);
 
 function stamp() {
   return new Date().toISOString().slice(0, 10);
@@ -56,10 +56,11 @@ function exportToExcel(totals, rows, advLabel) {
   XLSX.writeFile(wb, `Material-Advance-Report-${stamp()}.xlsx`);
 }
 
-async function exportToPDF(totals, rows, advLabel) {
+async function exportToPDF(totals, rows, advLabel, company) {
   const { default: jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  drawPdfCompany(doc, company);
   doc.setFontSize(11);
   doc.setFont(undefined, "normal");
   doc.text("Material Advance Report", 40, 40);
@@ -143,24 +144,36 @@ export default function MaterialAdvanceReport() {
       );
     });
 
-    // "Adjusted" column = the sum of the "Bala. Mat. Advance" values of all
-    // the PO's invoices (row 9 of the PO sheet, one value per invoice).
+    // "Adjusted" column = the material advance actually adjusted (deducted)
+    // through the PO's invoices, i.e. the sum of the per-invoice "Material
+    // Advance" deductions. (Previously this summed the running balances of
+    // every invoice, which over-counted.)
     const adjustedById = {};
     filtered.forEach(({ po, items, invoices }) => {
       const ledger = computePOLedger(po, items || [], invoices || []);
       adjustedById[po.id] = ledger.invoiceRows.reduce(
-        (sum, inv) => sum + n(inv.matAdvanceBalance),
+        (sum, inv) => sum + n(inv.matAdvance),
         0
       );
     });
 
     return {
       ...base,
-      rows: base.rows.map((r) => ({
-        ...r,
-        recovered: poLevelById[r.poId] || 0,
-        balanceAdvance: adjustedById[r.poId] || 0,
-      })),
+      rows: base.rows.map((r) => {
+        const advance = poLevelById[r.poId] || 0;
+        const adjusted = adjustedById[r.poId] || 0;
+        const bala = advance - adjusted;
+        // Status follows the figures shown on this report.
+        const status =
+          advance <= 1 && adjusted <= 1
+            ? "no-advance"
+            : bala < -1
+            ? "over-recovered"
+            : bala <= 1
+            ? "fully-recovered"
+            : "balance-pending";
+        return { ...r, recovered: advance, balanceAdvance: adjusted, status };
+      }),
     };
   }, [allData, group]);
 
@@ -194,7 +207,7 @@ export default function MaterialAdvanceReport() {
     if (!report) return;
     setExportingPdf(true);
     try {
-      await exportToPDF(totals, visibleRows, advLabel);
+      await exportToPDF(totals, visibleRows, advLabel, group);
     } finally {
       setExportingPdf(false);
     }
@@ -213,7 +226,7 @@ export default function MaterialAdvanceReport() {
           docType="MATERIAL ADVANCE REPORT"
           fields={[
             { label: "POs", value: report ? report.rows.length : "—" },
-            { label: "Generated", value: new Date().toLocaleDateString("en-GB") },
+            { label: "Generated", value: fmtToday() },
           ]}
         />
         <div className="matadv-actions">
@@ -296,16 +309,7 @@ export default function MaterialAdvanceReport() {
                 >
                   <td className="text-rivet">{r.poCode}</td>
                   <td className="text-right tabular">{fmtNum(r.recovered, 0)}</td>
-                  <td
-                    className={`text-right tabular ${
-                      r.balanceAdvance < -0.5
-                        ? "text-warn"
-                        : r.balanceAdvance > 0.5
-                        ? "text-rivet2"
-                        : "text-ok"
-                    }`}
-                    style={{ fontWeight: 600 }}
-                  >
+                  <td className="text-right tabular" style={{ fontWeight: 600 }}>
                     {fmtNum(r.balanceAdvance, 0)}
                   </td>
                   <td
