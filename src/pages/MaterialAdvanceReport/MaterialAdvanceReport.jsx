@@ -132,16 +132,13 @@ export default function MaterialAdvanceReport() {
     const base = computeMaterialAdvanceReport(filtered);
 
     // "Material Advance @ x%" column = the PO-level figure shown under the
-    // "Wt./Kg" column on the PO sheet page: total item weight x unit rate x
-    // Material Advance %. It is always the whole-PO value, never the amount
-    // deducted through the 1st (or any) invoice.
+    // "Wt./Kg" column on the PO sheet page. It is entered manually there
+    // (double-click) and stored as the PO's openingMatAdvance - never
+    // calculated, and never the amount deducted through any one invoice.
     const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
     const poLevelById = {};
-    filtered.forEach(({ po, items }) => {
-      const weight = (items || []).reduce((sum, it) => sum + n(it.weightKg), 0);
-      poLevelById[po.id] = Math.round(
-        weight * n(po.unitRate) * (n(po.matAdvPercent) / 100)
-      );
+    filtered.forEach(({ po }) => {
+      poLevelById[po.id] = n(po.openingMatAdvance);
     });
 
     // "Adjusted" column = the material advance actually adjusted (deducted)

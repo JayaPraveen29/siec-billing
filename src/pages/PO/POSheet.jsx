@@ -153,6 +153,54 @@ export default function POSheet() {
     setEditingTdsId(null);
   }
 
+  // PO-level Material Advance (the figure in the Wt./Kg column) - manual,
+  // double-click to edit. Stored as the PO's openingMatAdvance, which also
+  // seeds the Bala. Mat. Advance running balance.
+  const [editingPoMatAdv, setEditingPoMatAdv] = useState(false);
+  const [poMatAdvDraft, setPoMatAdvDraft] = useState("");
+
+  async function handlePoMatAdvSave(rawValue) {
+    const value = rawValue.trim();
+    await updatePOSheet(id, { openingMatAdvance: value === "" ? 0 : Number(value) || 0 });
+    setPoMatAdvDraft("");
+    setEditingPoMatAdv(false);
+  }
+
+  // Draft values for the inline-editable Material Advance cells — manual
+  // entry per invoice (not auto-calculated), same double-click pattern.
+  const [matAdvDrafts, setMatAdvDrafts] = useState({});
+  const [editingMatAdvId, setEditingMatAdvId] = useState(null);
+
+  function startEditingMatAdv(inv) {
+    setMatAdvDrafts((prev) => ({
+      ...prev,
+      [inv.id]: inv.matAdvanceOverride ?? "",
+    }));
+    setEditingMatAdvId(inv.id);
+  }
+
+  function cancelEditingMatAdv(invoiceId) {
+    setMatAdvDrafts((prev) => {
+      const next = { ...prev };
+      delete next[invoiceId];
+      return next;
+    });
+    setEditingMatAdvId(null);
+  }
+
+  async function handleMatAdvChange(invoiceId, rawValue) {
+    const value = rawValue.trim();
+    await updateInvoice(id, invoiceId, {
+      matAdvanceOverride: value === "" ? "" : Number(value),
+    });
+    setMatAdvDrafts((prev) => {
+      const next = { ...prev };
+      delete next[invoiceId];
+      return next;
+    });
+    setEditingMatAdvId(null);
+  }
+
   // Draft values for the inline-editable Payment Date cells. Double-click a
   // cell to open a native <input type="date"> date-picker; the draft is
   // stored as an ISO (yyyy-mm-dd) string, same format the input works with.
@@ -290,7 +338,8 @@ export default function POSheet() {
     const gst = basic * (n(po.gstPercent) / 100);
     const totalInvoiceValue = Math.round(basic + gst);
     const roundOff = totalInvoiceValue - basic - gst;
-    const matAdvance = Math.round(basic * (n(po.matAdvPercent) / 100));
+    // Manual entry (Opening Mat. Advance) - not calculated from the %.
+    const matAdvance = n(po.openingMatAdvance);
     const tds = Math.ceil(basic * (n(po.tdsPercent) / 100) - Number.EPSILON);
     return {
       qty,
@@ -682,6 +731,41 @@ export default function POSheet() {
                     <tr key={def.no} className={def.bold ? "po-summary-row-bold" : undefined}>
                       <td>{def.no}</td>
                       <td>{def.label}</td>
+                      {def.no === 6 ? (
+                        editingPoMatAdv ? (
+                          <td className="text-right tabular">
+                            <input
+                              autoFocus
+                              type="number"
+                              step="0.01"
+                              value={poMatAdvDraft}
+                              onChange={(e) => setPoMatAdvDraft(e.target.value)}
+                              onFocus={(e) => e.target.select()}
+                              onBlur={(e) => handlePoMatAdvSave(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") e.target.blur();
+                                if (e.key === "Escape") {
+                                  setPoMatAdvDraft("");
+                                  setEditingPoMatAdv(false);
+                                }
+                              }}
+                              className="input po-unit-rate-input"
+                              title="Total material advance for this PO"
+                            />
+                          </td>
+                        ) : (
+                          <td
+                            className="text-right tabular po-unit-rate-display"
+                            onDoubleClick={() => {
+                              setPoMatAdvDraft(po.openingMatAdvance ?? "");
+                              setEditingPoMatAdv(true);
+                            }}
+                            title="Double-click to enter / edit"
+                          >
+                            {poLevelTotal ? fmtNum(poLevelTotal, 0) : "-"}
+                          </td>
+                        )
+                      ) : (
                       <td
                         className="text-right tabular"
                         style={def.bold ? { fontWeight: 600 } : undefined}
@@ -694,6 +778,7 @@ export default function POSheet() {
                           ? fmtNum(poLevelTotal, def.decimals ?? 0)
                           : "-"}
                       </td>
+                      )}
                       {sortedInvoicesForMatrix.map((inv) => {
                         if (def.no === 1) {
                           const r = invoiceRowById[inv.id];
@@ -738,6 +823,54 @@ export default function POSheet() {
                               title="Double-click to edit"
                             >
                               {fmtNum(effectiveRate, 2)}
+                            </td>
+                          );
+                        }
+
+                        if (def.no === 6) {
+                          // Material Advance row - manual entry, double-click to edit.
+                          const r = invoiceRowById[inv.id];
+                          const effectiveMatAdv = r?.matAdvance;
+
+                          if (editingMatAdvId === inv.id) {
+                            const draft = matAdvDrafts[inv.id];
+                            const value = draft !== undefined ? draft : "";
+                            return (
+                              <td key={inv.id} className="text-right tabular">
+                                <input
+                                  autoFocus
+                                  type="number"
+                                  step="0.01"
+                                  value={value}
+                                  onChange={(e) =>
+                                    setMatAdvDrafts((prev) => ({
+                                      ...prev,
+                                      [inv.id]: e.target.value,
+                                    }))
+                                  }
+                                  onFocus={(e) => e.target.select()}
+                                  onBlur={(e) => handleMatAdvChange(inv.id, e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") e.target.blur();
+                                    if (e.key === "Escape") cancelEditingMatAdv(inv.id);
+                                  }}
+                                  className="input po-unit-rate-input"
+                                  title="Material advance adjusted against this invoice"
+                                />
+                              </td>
+                            );
+                          }
+
+                          return (
+                            <td
+                              key={inv.id}
+                              className="text-right tabular po-unit-rate-display"
+                              onDoubleClick={() => startEditingMatAdv(inv)}
+                              title="Double-click to enter / edit"
+                            >
+                              {effectiveMatAdv && effectiveMatAdv !== 0
+                                ? fmtNum(effectiveMatAdv, 0)
+                                : "-"}
                             </td>
                           );
                         }
@@ -1391,6 +1524,19 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
           </label>
         </div>
 
+        <label style={{ display: "block", marginBottom: "0.75rem" }}>
+          <span className="field-label">Material Advance (₹) — manual entry</span>
+          <input
+            type="number"
+            step="0.01"
+            placeholder="Leave blank for 0 — can be entered later"
+            value={matAdvanceOverride}
+            onChange={(e) => setMatAdvanceOverride(e.target.value)}
+            className="input"
+            style={{ marginTop: "0.25rem" }}
+          />
+        </label>
+
         <div>
           <div className="field-label" style={{ marginBottom: "0.5rem" }}>
             Quantity Billed per Item (kg)
@@ -1423,21 +1569,11 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
           className={`advanced-toggle${showAdvanced ? " open" : ""}`}
         >
           <ChevronDown size={14} />
-          Manual overrides (Mat. Advance / TDS / Round Off)
+          Manual overrides (TDS / Round Off)
         </button>
 
         {showAdvanced && (
           <div className="form-row-3">
-            <label style={{ display: "block" }}>
-              <span className="field-label">Mat. Advance (₹)</span>
-              <input
-                type="number"
-                value={matAdvanceOverride}
-                onChange={(e) => setMatAdvanceOverride(e.target.value)}
-                className="input"
-                style={{ marginTop: "0.25rem" }}
-              />
-            </label>
             <label style={{ display: "block" }}>
               <span className="field-label">TDS (₹)</span>
               <input

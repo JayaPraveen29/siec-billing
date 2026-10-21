@@ -57,9 +57,15 @@
     transform: rotate(360deg);
   }
 }
-@media (max-width: 640px) {
+/* Stack the header buttons under the title block as soon as the window gets
+   narrower than a full desktop (sidebar + 6 fields + 3 buttons won't fit). */
+@media (max-width: 1280px) {
   .po-titleblock-row {
+    width: 100%;
     flex-direction: column;
+  }
+  .po-titleblock-row .title-block {
+    width: 100%;
   }
   .po-header-actions {
     align-self: flex-start;
@@ -68,7 +74,7 @@
 
 .po-stat-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
   gap: 0.75rem;
   margin-top: 1.5rem;
 }
@@ -239,11 +245,6 @@
   transform: rotate(180deg);
 }
 
-@media (min-width: 480px) {
-  .po-stat-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
 
 @media (min-width: 640px) {
   .po-page {

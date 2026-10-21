@@ -27,7 +27,6 @@ export function computePOLedger(po, items, invoices) {
   const unitRate = num(po.unitRate);
   const gstPercent = num(po.gstPercent);
   const tdsPercent = num(po.tdsPercent);
-  const matAdvPercent = num(po.matAdvPercent);
   const openingMatAdvance = num(po.openingMatAdvance);
 
   const sortedInvoices = [...invoices].sort((a, b) => {
@@ -56,10 +55,11 @@ export function computePOLedger(po, items, invoices) {
         ? num(inv.roundOffOverride)
         : totalInvoiceValue - basic - gst;
 
-    const matAdvance =
-      inv.matAdvanceOverride !== undefined && inv.matAdvanceOverride !== ""
-        ? num(inv.matAdvanceOverride)
-        : Math.round(basic * (matAdvPercent / 100));
+    // Material Advance is entered manually per invoice (double-click the cell
+    // on the PO sheet). It is no longer derived from basic x Mat. Adv. %;
+    // blank means nothing adjusted (0). The field name `matAdvanceOverride`
+    // is kept so already-stored data keeps working.
+    const matAdvance = num(inv.matAdvanceOverride);
 
     const tds =
       inv.tdsOverride !== undefined && inv.tdsOverride !== ""

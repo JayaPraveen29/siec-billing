@@ -5,6 +5,7 @@
   padding: 1rem 1.25rem;
   position: relative;
   overflow: hidden;
+  container-type: inline-size;
 }
 
 .stat-card::before {
@@ -27,7 +28,10 @@
 
 .stat-card-value {
   font-family: var(--font-mono);
-  font-size: 1.5rem;
+  /* Scales with the card's width (cqi) so long amounts like
+     ₹8,53,18,000 never get cut off; wraps only as a last resort. */
+  font-size: clamp(0.95rem, 10.5cqi, 1.5rem);
+  overflow-wrap: anywhere;
   margin-top: 0.25rem;
   font-variant-numeric: tabular-nums;
   color: var(--color-paper);
@@ -47,10 +51,4 @@
   font-size: 0.75rem;
   color: var(--color-muted);
   margin-top: 0.25rem;
-}
-
-@media (max-width: 480px) {
-  .stat-card-value {
-    font-size: 1.25rem;
-  }
 }

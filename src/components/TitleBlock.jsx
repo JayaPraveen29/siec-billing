@@ -17,12 +17,9 @@ export default function TitleBlock({ docType, fields = [], company = "SIEC GROUP
         </div>
       </div>
       {fields.length > 0 && (
-        <div
-          className="title-block-fields"
-          style={{ gridTemplateColumns: `repeat(${fields.length}, minmax(0,1fr))` }}
-        >
+        <div className="title-block-fields">
           {fields.map((f, i) => (
-            <div key={i} className={`title-block-field${i > 0 ? " bordered" : ""}`}>
+            <div key={i} className="title-block-field">
               <div className="title-block-field-label">{f.label}</div>
               <div className="title-block-field-value tabular">{f.value}</div>
             </div>
