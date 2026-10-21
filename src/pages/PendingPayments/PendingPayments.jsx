@@ -46,14 +46,14 @@ function sumOf(bills) {
   );
 }
 
-function groupByPO(bills) {
+function groupByPO(bills, pmByPoId = {}) {
   const map = new Map();
   bills.forEach((b) => {
     if (!map.has(b.poId))
       map.set(b.poId, {
         poId: b.poId,
         poCode: b.poCode,
-        projectManager: b.projectManager || "",
+        projectManager: b.projectManager || pmByPoId[b.poId] || "",
         bills: [],
       });
     map.get(b.poId).bills.push(b);
@@ -253,7 +253,16 @@ export default function PendingPayments() {
     });
   }, [report, search, fromDate, toDate, paymentStatus, ageBucket]);
 
-  const groups = useMemo(() => groupByPO(visibleBills), [visibleBills]);
+  // Project Manager of each PO (read straight from the PO sheet data).
+  const pmByPoId = useMemo(() => {
+    const m = {};
+    (allData || []).forEach(({ po }) => {
+      m[po.id] = po.projectManager || "";
+    });
+    return m;
+  }, [allData]);
+
+  const groups = useMemo(() => groupByPO(visibleBills, pmByPoId), [visibleBills, pmByPoId]);
 
   // Grand total follows the filters, so it always matches what is on screen.
   const grand = useMemo(
