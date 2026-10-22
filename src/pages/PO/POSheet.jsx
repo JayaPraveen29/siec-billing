@@ -360,15 +360,15 @@ export default function POSheet() {
     return [
       { no: 1, label: "Unit Rate", getVal: (r) => (r ? r.unitRate : null), decimals: 2 },
       { no: 2, label: "Basic Value", getVal: (r) => r?.basic, decimals: 2 },
-      { no: 3, label: `GST @ ${po.gstPercent}%`, getVal: (r) => r?.gst, decimals: 2 },
+      { no: 3, label: "GST", getVal: (r) => r?.gst, decimals: 2 },
       // Round Off is the fractional-rupee residual left over when Basic+GST
       // gets rounded to a whole Total Invoice Value (see ledger.js) — it's
       // normally well under ₹1, so it needs 2 decimal places or it displays
       // as a meaningless "0"/"-0" for every invoice.
       { no: 4, label: "Round Off", getVal: (r) => r?.roundOff, decimals: 2 },
       { no: 5, label: "Total Invoice Value", getVal: (r) => r?.totalInvoiceValue, bold: true },
-      { no: 6, label: `Material Advance @ ${po.matAdvPercent}%`, getVal: (r) => r?.matAdvance },
-      { no: 7, label: `TDS @ ${po.tdsPercent}%`, getVal: (r) => r?.tds },
+      { no: 6, label: "Material Advance", getVal: (r) => r?.matAdvance },
+      { no: 7, label: "TDS", getVal: (r) => r?.tds },
       {
         no: 8,
         label: "Net Receivable",
@@ -855,7 +855,7 @@ export default function POSheet() {
                                     if (e.key === "Escape") cancelEditingMatAdv(inv.id);
                                   }}
                                   className="input po-unit-rate-input"
-                                  title="Material advance adjusted against this invoice"
+                                  title={`Leave blank for the full ${po.matAdvPercent}% of Basic; a smaller value is used as entered, a larger one is capped`}
                                 />
                               </td>
                             );
@@ -866,7 +866,7 @@ export default function POSheet() {
                               key={inv.id}
                               className="text-right tabular po-unit-rate-display"
                               onDoubleClick={() => startEditingMatAdv(inv)}
-                              title="Double-click to enter / edit"
+                              title={`Auto ${po.matAdvPercent}% of Basic. Double-click to enter a smaller amount (blank = auto)`}
                             >
                               {effectiveMatAdv && effectiveMatAdv !== 0
                                 ? fmtNum(effectiveMatAdv, 0)
@@ -1525,11 +1525,11 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
         </div>
 
         <label style={{ display: "block", marginBottom: "0.75rem" }}>
-          <span className="field-label">Material Advance (₹) — manual entry</span>
+          <span className="field-label">Material Advance (₹) — only if less than the PO's Mat. Adv. % of Basic</span>
           <input
             type="number"
             step="0.01"
-            placeholder="Leave blank for 0 — can be entered later"
+            placeholder="Leave blank to take the full Mat. Adv. % of Basic"
             value={matAdvanceOverride}
             onChange={(e) => setMatAdvanceOverride(e.target.value)}
             className="input"

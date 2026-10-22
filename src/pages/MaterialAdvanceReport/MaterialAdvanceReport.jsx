@@ -179,18 +179,8 @@ export default function MaterialAdvanceReport() {
     return filterMaterialAdvanceRows(report.rows, { search, status });
   }, [report, search, status]);
 
-  // Column heading, e.g. "Material Advance @ 20%". If the POs shown use
-  // different percentages, fall back to a plain "Material Advance".
-  const advLabel = useMemo(() => {
-    const pcts = new Set(
-      (allData || [])
-        .filter((d) => group === "all" || d.po.group === group)
-        .map((d) => Number(d.po.matAdvPercent) || 0)
-    );
-    return pcts.size === 1
-      ? `Material Advance @ ${[...pcts][0]}%`
-      : "Material Advance";
-  }, [allData, group]);
+  // Column heading.
+  const advLabel = "Material Advance";
 
   // Grand total follows the filters, so it always matches the rows on screen.
   const totals = useMemo(() => sumMaterialAdvanceRows(visibleRows), [visibleRows]);

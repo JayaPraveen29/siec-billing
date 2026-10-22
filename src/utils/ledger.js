@@ -27,6 +27,7 @@ export function computePOLedger(po, items, invoices) {
   const unitRate = num(po.unitRate);
   const gstPercent = num(po.gstPercent);
   const tdsPercent = num(po.tdsPercent);
+  const matAdvPercent = num(po.matAdvPercent);
   const openingMatAdvance = num(po.openingMatAdvance);
 
   const sortedInvoices = [...invoices].sort((a, b) => {
@@ -55,11 +56,20 @@ export function computePOLedger(po, items, invoices) {
         ? num(inv.roundOffOverride)
         : totalInvoiceValue - basic - gst;
 
-    // Material Advance is entered manually per invoice (double-click the cell
-    // on the PO sheet). It is no longer derived from basic x Mat. Adv. %;
-    // blank means nothing adjusted (0). The field name `matAdvanceOverride`
-    // is kept so already-stored data keeps working.
-    const matAdvance = num(inv.matAdvanceOverride);
+    // Material Advance = the PO's Mat. Adv. % of Basic Value (e.g. 20%), unless
+    // a smaller amount is entered manually for that invoice (double-click):
+    //   blank           -> full cap (Basic x %), same as the original auto calc
+    //   entered <  cap  -> the entered value as-is
+    //   entered >= cap  -> capped at the cap
+    // The field name `matAdvanceOverride` is kept so stored data keeps working.
+    const matAdvanceCap = Math.round(basic * (matAdvPercent / 100));
+    const hasManualMatAdv =
+      inv.matAdvanceOverride !== undefined &&
+      inv.matAdvanceOverride !== "" &&
+      inv.matAdvanceOverride !== null;
+    const matAdvance = hasManualMatAdv
+      ? Math.min(num(inv.matAdvanceOverride), matAdvanceCap)
+      : matAdvanceCap;
 
     const tds =
       inv.tdsOverride !== undefined && inv.tdsOverride !== ""
@@ -90,6 +100,7 @@ export function computePOLedger(po, items, invoices) {
       roundOff,
       totalInvoiceValue,
       matAdvance,
+      matAdvanceCap,
       tds,
       netReceivable,
       paymentReceived,
