@@ -227,7 +227,22 @@ export default function Dashboard() {
                 <span>Mat. Adv. {po.matAdvPercent}%</span>
               </div>
               <div className="po-card-meta">
-                <span>
+                <span
+                  style={
+                    Number(po.matAdvPercent) > 100 ||
+                    Number(po.matAdvPercent) < 0 ||
+                    poBalances[po.id] < -1
+                      ? { color: "var(--color-warn)" }
+                      : undefined
+                  }
+                  title={
+                    Number(po.matAdvPercent) > 100 || Number(po.matAdvPercent) < 0
+                      ? "Mat. Adv. % is outside 0-100 - please correct it"
+                      : poBalances[po.id] < -1
+                      ? "Negative balance - more received than billed. Please check this PO"
+                      : undefined
+                  }
+                >
                   Bal to receive:{" "}
                   {poBalances[po.id] === undefined
                     ? "…"

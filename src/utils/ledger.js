@@ -27,7 +27,9 @@ export function computePOLedger(po, items, invoices) {
   const unitRate = num(po.unitRate);
   const gstPercent = num(po.gstPercent);
   const tdsPercent = num(po.tdsPercent);
-  const matAdvPercent = num(po.matAdvPercent);
+  // A Mat. Adv. % outside 0-100 is bad data (material advance can't exceed the
+  // basic value), so it is limited here rather than blowing up every total.
+  const matAdvPercent = Math.min(Math.max(num(po.matAdvPercent), 0), 100);
   const openingMatAdvance = num(po.openingMatAdvance);
 
   const sortedInvoices = [...invoices].sort((a, b) => {
