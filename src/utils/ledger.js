@@ -4,6 +4,18 @@
 // -> TDS -> Net Receivable -> Balance to be Received, plus a running
 // material-advance ledger and per-item quantity balances.
 
+// Material Advance % used when a PO has none stored (missing, empty or 0).
+// Some POs were saved without it, which made every Material Advance show "-".
+export const DEFAULT_MAT_ADV_PERCENT = 20;
+
+/** The Mat. Adv. % actually applied to a PO (stored value, else 20), kept within 0-100. */
+export function effectiveMatAdvPercent(po) {
+  const stored = Number(po?.matAdvPercent);
+  const pct =
+    Number.isFinite(stored) && stored !== 0 ? stored : DEFAULT_MAT_ADV_PERCENT;
+  return Math.min(Math.max(pct, 0), 100);
+}
+
 export function roundHalf(n) {
   return Math.round((n + Number.EPSILON) * 1) / 1;
 }
@@ -27,9 +39,9 @@ export function computePOLedger(po, items, invoices) {
   const unitRate = num(po.unitRate);
   const gstPercent = num(po.gstPercent);
   const tdsPercent = num(po.tdsPercent);
-  // A Mat. Adv. % outside 0-100 is bad data (material advance can't exceed the
-  // basic value), so it is limited here rather than blowing up every total.
-  const matAdvPercent = Math.min(Math.max(num(po.matAdvPercent), 0), 100);
+  // Stored % (default 20 if missing/0), limited to 0-100 so bad data can't
+  // blow up the totals.
+  const matAdvPercent = effectiveMatAdvPercent(po);
   const openingMatAdvance = num(po.openingMatAdvance);
 
   const sortedInvoices = [...invoices].sort((a, b) => {

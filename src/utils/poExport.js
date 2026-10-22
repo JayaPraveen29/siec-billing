@@ -10,6 +10,7 @@
 // on-screen table in POSheet.jsx, rather than two separate tables.
 
 import * as XLSX from "xlsx";
+import { effectiveMatAdvPercent } from "./ledger";
 import { fmtNum, fmtDate, fmtToday, drawPdfCompany } from "./format";
 
 // Same palette as src/styles/variables.css, used to color specific
@@ -201,7 +202,7 @@ export async function exportPOSheetToPDF(
 
   doc.setFontSize(9);
   doc.text(
-    `Unit Rate: Rs.${fmtNum(po.unitRate, 2)}/kg   GST: ${po.gstPercent}%   TDS: ${po.tdsPercent}%   Mat. Adv.: ${po.matAdvPercent}%`,
+    `Unit Rate: Rs.${fmtNum(po.unitRate, 2)}/kg   GST: ${po.gstPercent}%   TDS: ${po.tdsPercent}%   Mat. Adv.: ${effectiveMatAdvPercent(po)}%`,
     40,
     58
   );

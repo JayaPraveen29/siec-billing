@@ -7,7 +7,7 @@ import {
   fetchAllPOData,
   subscribePOSheets,
 } from "../../services/poService";
-import { computePOLedger } from "../../utils/ledger";
+import { computePOLedger, effectiveMatAdvPercent } from "../../utils/ledger";
 import { fmtINR, fmtNum , fmtToday } from "../../utils/format";
 import StatCard from "../../components/StatCard";
 import Loading from "../../components/Loading";
@@ -224,7 +224,7 @@ export default function Dashboard() {
               <div className="po-card-meta">
                 <span>Rate ₹{fmtNum(po.unitRate, 2)}/kg</span>
                 <span>GST {po.gstPercent}%</span>
-                <span>Mat. Adv. {po.matAdvPercent}%</span>
+                <span>Mat. Adv. {effectiveMatAdvPercent(po)}%</span>
               </div>
               <div className="po-card-meta">
                 <span

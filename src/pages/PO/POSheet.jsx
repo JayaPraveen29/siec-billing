@@ -14,7 +14,7 @@ import {
   updateItem,
   updatePOSheet,
 } from "../../services/poService";
-import { computePOLedger } from "../../utils/ledger";
+import { computePOLedger, effectiveMatAdvPercent } from "../../utils/ledger";
 import { fmtINR, fmtNum, fmtDate, toInputDate } from "../../utils/format";
 import { exportPOSheetToExcel, exportPOSheetToPDF } from "../../utils/poExport";
 import TitleBlock from "../../components/TitleBlock";
@@ -852,7 +852,7 @@ export default function POSheet() {
                                     if (e.key === "Escape") cancelEditingMatAdv(inv.id);
                                   }}
                                   className="input po-unit-rate-input"
-                                  title={`Leave blank for the full ${po.matAdvPercent}% of Basic; a smaller value is used as entered, a larger one is capped`}
+                                  title={`Leave blank for the full ${effectiveMatAdvPercent(po)}% of Basic; a smaller value is used as entered, a larger one is capped`}
                                 />
                               </td>
                             );
@@ -863,7 +863,7 @@ export default function POSheet() {
                               key={inv.id}
                               className="text-right tabular po-unit-rate-display"
                               onDoubleClick={() => startEditingMatAdv(inv)}
-                              title={`Auto ${po.matAdvPercent}% of Basic. Double-click to enter a smaller amount (blank = auto)`}
+                              title={`Auto ${effectiveMatAdvPercent(po)}% of Basic. Double-click to enter a smaller amount (blank = auto)`}
                             >
                               {effectiveMatAdv && effectiveMatAdv !== 0
                                 ? fmtNum(effectiveMatAdv, 0)
