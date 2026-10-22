@@ -21,6 +21,7 @@ import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import StatCard from "../../components/StatCard";
+import IndianNumberInput from "../../components/IndianNumberInput";
 import { usePOImport } from "../../hooks/usePOImport";
 import ImportPOModal from "./ImportPOModal";
 import "./POSheet.css";
@@ -501,7 +502,7 @@ export default function POSheet() {
           <button
             onClick={() => setSettingsModal(true)}
             className="btn-outline po-settings-btn"
-            title="Edit Unit Rate, GST, TDS, Material Advance %"
+            title="Edit Unit Rate, GST, TDS, Material Advance"
           >
             <Settings size={15} /> Edit Rate & Settings
           </button>
@@ -734,14 +735,12 @@ export default function POSheet() {
                       {def.no === 6 ? (
                         editingPoMatAdv ? (
                           <td className="text-right tabular">
-                            <input
+                            <IndianNumberInput
                               autoFocus
-                              type="number"
-                              step="0.01"
                               value={poMatAdvDraft}
-                              onChange={(e) => setPoMatAdvDraft(e.target.value)}
+                              onChange={(v) => setPoMatAdvDraft(v)}
                               onFocus={(e) => e.target.select()}
-                              onBlur={(e) => handlePoMatAdvSave(e.target.value)}
+                              onBlur={(v) => handlePoMatAdvSave(v)}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") e.target.blur();
                                 if (e.key === "Escape") {
@@ -837,19 +836,17 @@ export default function POSheet() {
                             const value = draft !== undefined ? draft : "";
                             return (
                               <td key={inv.id} className="text-right tabular">
-                                <input
+                                <IndianNumberInput
                                   autoFocus
-                                  type="number"
-                                  step="0.01"
                                   value={value}
-                                  onChange={(e) =>
+                                  onChange={(v) =>
                                     setMatAdvDrafts((prev) => ({
                                       ...prev,
-                                      [inv.id]: e.target.value,
+                                      [inv.id]: v,
                                     }))
                                   }
                                   onFocus={(e) => e.target.select()}
-                                  onBlur={(e) => handleMatAdvChange(inv.id, e.target.value)}
+                                  onBlur={(v) => handleMatAdvChange(inv.id, v)}
                                   onKeyDown={(e) => {
                                     if (e.key === "Enter") e.target.blur();
                                     if (e.key === "Escape") cancelEditingMatAdv(inv.id);
@@ -1105,7 +1102,6 @@ function PoSettingsModal({ po, onCancel, onSave }) {
     unitRate: po.unitRate ?? "",
     gstPercent: po.gstPercent ?? "",
     tdsPercent: po.tdsPercent ?? "",
-    matAdvPercent: po.matAdvPercent ?? "",
     openingMatAdvance: po.openingMatAdvance ?? "",
   });
   const [saving, setSaving] = useState(false);
@@ -1121,7 +1117,8 @@ function PoSettingsModal({ po, onCancel, onSave }) {
         unitRate: Number(form.unitRate) || 0,
         gstPercent: Number(form.gstPercent) || 0,
         tdsPercent: Number(form.tdsPercent) || 0,
-        matAdvPercent: Number(form.matAdvPercent) || 0,
+        // matAdvPercent is not sent, so the PO's stored % (the per-invoice
+        // cap) is left untouched.
         openingMatAdvance: Number(form.openingMatAdvance) || 0,
       });
     } finally {
@@ -1185,7 +1182,7 @@ function PoSettingsModal({ po, onCancel, onSave }) {
           />
         </label>
 
-        <div className="form-row-3" style={{ marginTop: "0.75rem" }}>
+        <div className="form-row-2" style={{ marginTop: "0.75rem" }}>
           <label style={{ display: "block" }}>
             <span className="field-label">GST %</span>
             <input
@@ -1208,25 +1205,13 @@ function PoSettingsModal({ po, onCancel, onSave }) {
               style={{ marginTop: "0.25rem" }}
             />
           </label>
-          <label style={{ display: "block" }}>
-            <span className="field-label">Mat. Adv. %</span>
-            <input
-              type="number"
-              step="0.01"
-              value={form.matAdvPercent}
-              onChange={(e) => setForm({ ...form, matAdvPercent: e.target.value })}
-              className="input"
-              style={{ marginTop: "0.25rem" }}
-            />
-          </label>
         </div>
 
         <label style={{ display: "block", marginTop: "0.75rem" }}>
-          <span className="field-label">Opening Mat. Advance (₹)</span>
-          <input
-            type="number"
+          <span className="field-label">Material Advance (₹)</span>
+          <IndianNumberInput
             value={form.openingMatAdvance}
-            onChange={(e) => setForm({ ...form, openingMatAdvance: e.target.value })}
+            onChange={(v) => setForm({ ...form, openingMatAdvance: v })}
             className="input"
             style={{ marginTop: "0.25rem" }}
           />
@@ -1526,12 +1511,10 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
 
         <label style={{ display: "block", marginBottom: "0.75rem" }}>
           <span className="field-label">Material Advance (₹) — only if less than the PO's Mat. Adv. % of Basic</span>
-          <input
-            type="number"
-            step="0.01"
+          <IndianNumberInput
             placeholder="Leave blank to take the full Mat. Adv. % of Basic"
             value={matAdvanceOverride}
-            onChange={(e) => setMatAdvanceOverride(e.target.value)}
+            onChange={(v) => setMatAdvanceOverride(v)}
             className="input"
             style={{ marginTop: "0.25rem" }}
           />
