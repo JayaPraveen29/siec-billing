@@ -173,22 +173,6 @@ export default function ABSReport() {
 function GroupRows({ group }) {
   return (
     <>
-      <tr className="abs-subtotal-row">
-        <td className="text-rivet">{group.po.code}</td>
-        <td colSpan={2}>Subtotal</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.qty, 1)}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.basic, 0)}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.gst, 0)}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.tds, 0)}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.roundOff, 2)}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.grossValue, 2)}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.matAdvance, 0)}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.netReceivable, 0)}</td>
-        <td></td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.paymentReceived, 0)}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.balanceToReceive, 0)}</td>
-        <td></td>
-      </tr>
       {group.rows.map((r, idx) => (
         <tr key={idx}>
           <td></td>
@@ -212,6 +196,22 @@ function GroupRows({ group }) {
           <td className="text-right tabular text-muted">{r.days ?? ""}</td>
         </tr>
       ))}
+      <tr className="abs-subtotal-row">
+        <td className="text-rivet">{group.po.code}</td>
+        <td colSpan={2} className="text-right">Subtotal</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.qty, 1)}</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.basic, 0)}</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.gst, 0)}</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.tds, 0)}</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.roundOff, 2)}</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.grossValue, 2)}</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.matAdvance, 0)}</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.netReceivable, 0)}</td>
+        <td></td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.paymentReceived, 0)}</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.balanceToReceive, 0)}</td>
+        <td></td>
+      </tr>
     </>
   );
 }

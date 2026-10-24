@@ -9,7 +9,7 @@ import {
   ageClass,
   AGE_BUCKETS,
 } from "../../utils/pendingPaymentsReport";
-import { fmtNum, fmtINR, fmtDate, fmtToday, drawPdfCompany } from "../../utils/format";
+import { fmtNum, fmtDate, fmtToday, drawPdfCompany } from "../../utils/format";
 import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import "./PMPendingPayments.css";
@@ -331,8 +331,22 @@ export default function PMPendingPayments() {
     setLoading(false);
   }
 
+  // Initial load. `loading` already starts as true, so no synchronous
+  // setState is needed here; state is only set once the data arrives.
   useEffect(() => {
-    load();
+    let cancelled = false;
+    fetchAllPOData()
+      .then((all) => {
+        if (cancelled) return;
+        setAllData(all);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const report = useMemo(() => {
@@ -572,20 +586,6 @@ export default function PMPendingPayments() {
                 </tr>
               ))}
             </tbody>
-            <tfoot>
-              <tr>
-                <td>Grand Total</td>
-                <td className="text-right tabular">{poCount}</td>
-                <td className="text-right tabular">{grand.billCount}</td>
-                <td className="text-right tabular text-rivet2">{fmtINR(grand.netReceivable)}</td>
-                <td className="text-right tabular">{fmtINR(grand.paymentReceived)}</td>
-                <td className="text-right tabular">{fmtINR(grand.balanceToReceive)}</td>
-                <td className="text-right tabular">{fmtINR(grand.age30)}</td>
-                <td className="text-right tabular">{fmtINR(grand.age45)}</td>
-                <td className="text-right tabular">{fmtINR(grand.age46)}</td>
-                <td></td>
-              </tr>
-            </tfoot>
           </table>
         </div>
       )}
@@ -676,16 +676,6 @@ export default function PMPendingPayments() {
                 </Fragment>
               ))}
             </tbody>
-            <tfoot>
-              <tr>
-                <td>Grand Total</td>
-                <td></td>
-                <td className="text-right tabular text-rivet2">{fmtINR(grand.netReceivable)}</td>
-                <td className="text-right tabular">{fmtINR(grand.paymentReceived)}</td>
-                <td className="text-right tabular">{fmtINR(grand.balanceToReceive)}</td>
-                <td></td>
-              </tr>
-            </tfoot>
           </table>
         </div>
       )}

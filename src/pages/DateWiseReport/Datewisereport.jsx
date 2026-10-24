@@ -271,7 +271,7 @@ export default function DateWiseReport() {
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={3}>Subtotal</td>
+                  <td colSpan={3} className="text-right">Subtotal</td>
                   <td className="text-right tabular">{fmtNum(report.pendingSubtotal.qty, 1)}</td>
                   <td className="text-right tabular">
                     {fmtNum(report.pendingSubtotal.grossValue, 2)}
@@ -325,7 +325,7 @@ function DayRows({ day }) {
         </tr>
       ))}
       <tr className="datewise-subtotal-row">
-        <td colSpan={3}>Subtotal</td>
+        <td colSpan={3} className="text-right">Subtotal</td>
         <td className="text-right tabular">{fmtNum(day.subtotal.qty, 1)}</td>
         <td className="text-right tabular">{fmtNum(day.subtotal.basic, 0)}</td>
         <td className="text-right tabular">{fmtNum(day.subtotal.gst, 0)}</td>

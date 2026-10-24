@@ -202,6 +202,15 @@ export function computePOLedger(po, items, invoices) {
   };
 }
 
+/** Whole days from invoice date to payment date; null when either is missing/invalid. */
+function daysBetween(from, to) {
+  if (!from || !to) return null;
+  const a = typeof from.toDate === "function" ? from.toDate() : new Date(from);
+  const b = typeof to.toDate === "function" ? to.toDate() : new Date(to);
+  const diff = Math.round((b.getTime() - a.getTime()) / 86400000);
+  return Number.isFinite(diff) ? diff : null;
+}
+
 /**
  * Build the Abstract of Structural Bills (ABS) report: one row per invoice
  * across every PO sheet, grouped by PO with subtotals and a grand total.
@@ -226,7 +235,8 @@ export function computeABSReport(poSheets) {
       paymentDate: inv.paymentDate,
       paymentReceived: inv.paymentReceived,
       balanceToReceive: inv.balanceToReceive,
-      days: inv.days,
+      // ABS report: plain day count from invoice date to payment date.
+      days: daysBetween(inv.invoiceDate, inv.paymentDate),
     }));
 
     const subtotal = rows.reduce(

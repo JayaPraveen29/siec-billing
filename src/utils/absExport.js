@@ -7,7 +7,7 @@
 //   npm install jspdf jspdf-autotable
 
 import * as XLSX from "xlsx";
-import { fmtNum, fmtDate, drawPdfCompany } from "./format";
+import { fmtNum, fmtDate, fmtToday, drawPdfCompany } from "./format";
 
 const HEADERS = [
   "PO",
@@ -41,23 +41,6 @@ export function exportABSReportToExcel(report, filename = `ABS-Report-${stamp()}
   const rows = [HEADERS];
 
   report.groups.forEach((g) => {
-    rows.push([
-      g.po.code,
-      "Subtotal",
-      "",
-      Number(g.subtotal.qty) || 0,
-      Number(g.subtotal.basic) || 0,
-      Number(g.subtotal.gst) || 0,
-      Number(g.subtotal.tds) || 0,
-      Number(g.subtotal.roundOff) || 0,
-      Number(g.subtotal.grossValue) || 0,
-      Number(g.subtotal.matAdvance) || 0,
-      Number(g.subtotal.netReceivable) || 0,
-      "",
-      Number(g.subtotal.paymentReceived) || 0,
-      Number(g.subtotal.balanceToReceive) || 0,
-      "",
-    ]);
 
     g.rows.forEach((r) => {
       rows.push([
@@ -78,6 +61,24 @@ export function exportABSReportToExcel(report, filename = `ABS-Report-${stamp()}
         r.days ?? "",
       ]);
     });
+
+    rows.push([
+      g.po.code,
+      "",
+      "Subtotal",
+      Number(g.subtotal.qty) || 0,
+      Number(g.subtotal.basic) || 0,
+      Number(g.subtotal.gst) || 0,
+      Number(g.subtotal.tds) || 0,
+      Number(g.subtotal.roundOff) || 0,
+      Number(g.subtotal.grossValue) || 0,
+      Number(g.subtotal.matAdvance) || 0,
+      Number(g.subtotal.netReceivable) || 0,
+      "",
+      Number(g.subtotal.paymentReceived) || 0,
+      Number(g.subtotal.balanceToReceive) || 0,
+      "",
+    ]);
   });
 
   rows.push([
@@ -147,26 +148,10 @@ export async function exportABSReportToPDF(
   doc.text("Abstract of Structural Bills", 40, 40);
 
   doc.setFontSize(9);
-  doc.text(`PO Groups: ${report.groups.length}`, 40, 58);
+  doc.text(`PO Groups: ${report.groups.length}     Generated: ${fmtToday()}`, 40, 58);
 
   const body = [];
   report.groups.forEach((g) => {
-    body.push([
-      g.po.code,
-      { content: "Subtotal", colSpan: 2 },
-      fmtNum(g.subtotal.qty, 1),
-      fmtNum(g.subtotal.basic, 0),
-      fmtNum(g.subtotal.gst, 0),
-      fmtNum(g.subtotal.tds, 0),
-      fmtNum(g.subtotal.roundOff, 2),
-      fmtNum(g.subtotal.grossValue, 2),
-      fmtNum(g.subtotal.matAdvance, 0),
-      fmtNum(g.subtotal.netReceivable, 0),
-      "",
-      fmtNum(g.subtotal.paymentReceived, 0),
-      fmtNum(g.subtotal.balanceToReceive, 0),
-      "",
-    ]);
 
     g.rows.forEach((r) => {
       body.push([
@@ -187,6 +172,23 @@ export async function exportABSReportToPDF(
         r.days ?? "",
       ]);
     });
+
+    body.push([
+      g.po.code,
+      { content: "Subtotal", colSpan: 2, styles: { halign: "right" } },
+      fmtNum(g.subtotal.qty, 1),
+      fmtNum(g.subtotal.basic, 0),
+      fmtNum(g.subtotal.gst, 0),
+      fmtNum(g.subtotal.tds, 0),
+      fmtNum(g.subtotal.roundOff, 2),
+      fmtNum(g.subtotal.grossValue, 2),
+      fmtNum(g.subtotal.matAdvance, 0),
+      fmtNum(g.subtotal.netReceivable, 0),
+      "",
+      fmtNum(g.subtotal.paymentReceived, 0),
+      fmtNum(g.subtotal.balanceToReceive, 0),
+      "",
+    ]);
   });
 
   autoTable(doc, {
