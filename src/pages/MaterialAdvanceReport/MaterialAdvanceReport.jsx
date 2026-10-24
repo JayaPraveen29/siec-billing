@@ -7,7 +7,7 @@ import {
   filterMaterialAdvanceRows,
   sumMaterialAdvanceRows,
 } from "../../utils/materialAdvanceReport";
-import { computePOLedger } from "../../utils/ledger";
+import { computePOLedger, isMatAdvNA } from "../../utils/ledger";
 import { fmtNum, fmtINR, fmtToday, drawPdfCompany } from "../../utils/format";
 import * as XLSX from "xlsx";
 import TitleBlock from "../../components/TitleBlock";
@@ -26,12 +26,15 @@ function stamp() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// POs created with "NA" material advance show NA instead of numbers.
+const matCell = (r, value) => (r.matAdvNA ? "NA" : fmtNum(value, 0));
+
 function exportRow(r) {
   return [
     r.poCode,
-    fmtNum(r.recovered, 0),
-    fmtNum(r.balanceAdvance, 0),
-    fmtNum(balaMatAdv(r), 0),
+    matCell(r, r.recovered),
+    matCell(r, r.balanceAdvance),
+    matCell(r, balaMatAdv(r)),
   ];
 }
 
@@ -137,8 +140,10 @@ export default function MaterialAdvanceReport() {
     // calculated, and never the amount deducted through any one invoice.
     const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
     const poLevelById = {};
+    const naById = {};
     filtered.forEach(({ po }) => {
       poLevelById[po.id] = n(po.openingMatAdvance);
+      naById[po.id] = isMatAdvNA(po);
     });
 
     // "Adjusted" column = the material advance actually adjusted (deducted)
@@ -169,7 +174,13 @@ export default function MaterialAdvanceReport() {
             : bala <= 1
             ? "fully-recovered"
             : "balance-pending";
-        return { ...r, recovered: advance, balanceAdvance: adjusted, status };
+        return {
+          ...r,
+          recovered: advance,
+          balanceAdvance: adjusted,
+          status,
+          matAdvNA: !!naById[r.poId],
+        };
       }),
     };
   }, [allData, group]);
@@ -295,9 +306,9 @@ export default function MaterialAdvanceReport() {
                   onClick={() => navigate(`/po/${r.poId}`)}
                 >
                   <td className="text-rivet">{r.poCode}</td>
-                  <td className="text-right tabular">{fmtNum(r.recovered, 0)}</td>
+                  <td className="text-right tabular">{matCell(r, r.recovered)}</td>
                   <td className="text-right tabular" style={{ fontWeight: 600 }}>
-                    {fmtNum(r.balanceAdvance, 0)}
+                    {matCell(r, r.balanceAdvance)}
                   </td>
                   <td
                     className={`text-right tabular ${
@@ -305,7 +316,7 @@ export default function MaterialAdvanceReport() {
                     }`}
                     style={{ fontWeight: 600 }}
                   >
-                    {fmtNum(balaMatAdv(r), 0)}
+                    {matCell(r, balaMatAdv(r))}
                   </td>
                 </tr>
               ))}
