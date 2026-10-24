@@ -1,0 +1,325 @@
+/* PM Wise Pending Payments page.
+   Self-contained: every class is prefixed `pmp-` so nothing here depends on
+   (or can affect) the plain Pending Payments page. Colours/fonts come from
+   the global theme variables in styles/variables.css. */
+
+.pmp-page {
+  padding: 2rem;
+  max-width: 90rem;
+  margin: 0 auto;
+}
+
+/* ---------- Header ---------- */
+.pmp-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.pmp-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.pmp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--color-line);
+  background: transparent;
+  color: var(--color-paper);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.pmp-btn:hover:not(:disabled) {
+  border-color: var(--color-rivet);
+}
+
+.pmp-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pmp-btn .spinning {
+  animation: pmp-spin 0.8s linear infinite;
+}
+
+@keyframes pmp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- Filters ---------- */
+.pmp-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.pmp-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.6rem;
+  flex: 1 1 14rem;
+  min-width: 12rem;
+}
+
+.pmp-search input {
+  background: transparent;
+  border: none;
+  color: var(--color-paper);
+  font-size: 0.875rem;
+  font-family: var(--font-body);
+  width: 100%;
+}
+
+.pmp-search input:focus {
+  outline: none;
+}
+
+.pmp-date-range {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.pmp-date-range label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+}
+
+.pmp-date-range input[type="date"],
+.pmp-controls select {
+  background: var(--color-plate);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  color: var(--color-paper);
+  font-family: var(--font-body);
+}
+
+.pmp-date-range input[type="date"] {
+  padding: 0.4rem 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.pmp-controls select {
+  padding: 0.5rem 0.6rem;
+  font-size: 0.875rem;
+}
+
+.pmp-date-range input[type="date"]:focus,
+.pmp-controls select:focus {
+  outline: none;
+  border-color: var(--color-rivet);
+}
+
+.pmp-clear {
+  background: transparent;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.pmp-clear:hover {
+  border-color: var(--color-rivet);
+  color: var(--color-paper);
+}
+
+/* ---------- Back bar (sits directly above the tables) ---------- */
+.pmp-backbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
+}
+
+.pmp-backbar + .pmp-table-wrap {
+  margin-top: 0.75rem;
+}
+
+.pmp-backbar-pm {
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-rivet);
+}
+
+/* ---------- Tables ---------- */
+.pmp-table-wrap {
+  margin-top: 1.5rem;
+}
+
+.pmp-table-wrap + .pmp-table-wrap {
+  margin-top: 1.5rem;
+}
+
+.pmp-table {
+  width: 100%;
+}
+
+/* Headers follow their column's alignment (the global th default is centred). */
+.pmp-table th {
+  text-align: left;
+}
+
+.pmp-table th.text-right {
+  text-align: right;
+}
+
+/* Detail table: fixed, evenly sized columns so Bill No / Date line up under
+   their headers. */
+.pmp-table-detail {
+  table-layout: fixed;
+}
+
+.pmp-table-detail th:nth-child(1) {
+  width: 22%;
+}
+
+.pmp-table-detail th:nth-child(2) {
+  width: 16%;
+}
+
+.pmp-table-detail th:nth-child(n + 3) {
+  width: 15.5%;
+}
+
+.pmp-row {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.pmp-row:hover {
+  background: var(--color-plate2);
+}
+
+/* PM heading row */
+.pmp-pm-row td {
+  background: var(--color-plate);
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border-top: 2px solid var(--color-line);
+}
+
+/* PO heading row */
+.pmp-po-row td {
+  background: var(--color-plate2);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* PO / PM total rows */
+.pmp-total-row td {
+  font-weight: 600;
+  border-top: 1px solid var(--color-line);
+}
+
+/* Days due colouring: 31-45 amber, 46 & above red */
+.pmp-days {
+  font-weight: 600;
+}
+
+.pmp-days.age-30 {
+  color: var(--color-rivet2);
+}
+
+.pmp-days.age-60,
+.pmp-days.age-90 {
+  color: var(--color-warn);
+}
+
+/* ---------- Mobile ---------- */
+@media (max-width: 640px) {
+  .pmp-page {
+    padding: 1rem;
+  }
+
+  .pmp-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pmp-actions {
+    width: 100%;
+  }
+
+  .pmp-actions .pmp-btn {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+
+  .pmp-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+  }
+
+  /* flex-basis 14rem would become a 14rem HEIGHT in a column layout */
+  .pmp-search {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .pmp-date-range {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .pmp-date-range label {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  .pmp-date-range input[type="date"] {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .pmp-controls select,
+  .pmp-clear {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .pmp-backbar .pmp-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .pmp-table-detail {
+    table-layout: auto;
+  }
+}

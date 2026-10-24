@@ -83,7 +83,7 @@ export function exportDateWiseReportToExcel(
     d.rows.forEach((r, idx) => {
       rows.push(rowToArray(r, idx, fmtDate(d.date)));
     });
-    rows.push(subtotalToArray(`Subtotal — ${fmtDate(d.date)}`, d.subtotal));
+    rows.push(subtotalToArray("Subtotal", d.subtotal));
   });
 
   rows.push(subtotalToArray("Grand Total", report.grandTotal));
@@ -169,7 +169,7 @@ export async function exportDateWiseReportToPDF(
       ]);
     });
     body.push([
-      { content: `Subtotal — ${fmtDate(d.date)}`, colSpan: 3 },
+      { content: "Subtotal", colSpan: 3 },
       fmtNum(d.subtotal.qty, 1),
       fmtNum(d.subtotal.basic, 0),
       fmtNum(d.subtotal.gst, 0),

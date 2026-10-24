@@ -37,7 +37,7 @@ function normName(s) {
  * @param {Array} poSheets - [{ po, items, invoices }]
  */
 export function computePOItemWiseReport(poSheets) {
-  return poSheets.map(({ po, items, invoices }) => {
+  const groups = poSheets.map(({ po, items, invoices }) => {
     const ledger = computePOLedger(po, items, invoices);
 
     const invoiceCols = ledger.invoiceRows.map((inv) => ({
@@ -82,8 +82,21 @@ export function computePOItemWiseReport(poSheets) {
       unitRate: num(po.unitRate),
       invoiceCols,
       rows,
+      // 0 = fully billed (every item), 2 = not started (nothing billed),
+      // 1 = partially billed.
+      billingRank:
+        rows.length > 0 &&
+        rows.every((r) => r.status === "fully-billed" || r.status === "over-billed")
+          ? 0
+          : rows.every((r) => r.status === "not-started")
+          ? 2
+          : 1,
     };
   });
+
+  // Fully billed POs first, then partially billed, then not started.
+  groups.sort((a, b) => a.billingRank - b.billingRank);
+  return groups;
 }
 
 /** Sum a list of item rows into a subtotal row. */

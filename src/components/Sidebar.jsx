@@ -9,6 +9,7 @@ import {
   CalendarRange,
   Receipt,
   Hourglass,
+  Users,
   Landmark,
   ListTree,
   ChevronDown,
@@ -21,6 +22,7 @@ const REPORT_PATHS = [
   "/reports/po-item-wise",
   "/reports/bill-wise",
   "/reports/pending-payments",
+  "/reports/pm-pending-payments",
   "/reports/material-advance",
   "/reports/date-wise",
 ];
@@ -131,6 +133,15 @@ export default function Sidebar() {
             >
               <Hourglass size={15} />
               Pending Payments
+            </NavLink>
+            <NavLink
+              to="/reports/pm-pending-payments"
+              className={({ isActive }) =>
+                `sidebar-link sidebar-sublink${isActive ? " active" : ""}`
+              }
+            >
+              <Users size={15} />
+              PM Wise Pending Payments
             </NavLink>
             <NavLink
               to="/reports/material-advance"

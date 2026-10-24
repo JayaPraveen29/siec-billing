@@ -25,9 +25,11 @@ const PAYMENT_FILTERS = [
 
 const COLS = 6;
 
-// "PO: 123  |  PM: Name" heading text (PM only when one is set).
+const unitLabel = (u) => u || "Unassigned";
+
+// "PO: 123  |  PM: Name  |  Unit: SIEC" heading text (PM only when one is set).
 const poHeading = (g) =>
-  `PO: ${g.poCode}${g.projectManager ? `  |  PM: ${g.projectManager}` : ""}`;
+  `PO: ${g.poCode}${g.projectManager ? `  |  PM: ${g.projectManager}` : ""}  |  Unit: ${unitLabel(g.unit)}`;
 
 // ---------------------------------------------------------------------------
 // Group the (already filtered) pending bills by PO:
@@ -53,6 +55,7 @@ function groupByPO(bills, pmByPoId = {}) {
       map.set(b.poId, {
         poId: b.poId,
         poCode: b.poCode,
+        unit: b.unit || "",
         projectManager: b.projectManager || pmByPoId[b.poId] || "",
         bills: [],
       });
@@ -71,6 +74,29 @@ function groupByPO(bills, pmByPoId = {}) {
   return groups;
 }
 
+// Group the PO groups by Unit (company, e.g. SIEC / ST) so every bill can be
+// traced to its company:  its POs -> unit total.
+function groupByUnit(poGroups) {
+  const map = new Map();
+  poGroups.forEach((g) => {
+    if (!map.has(g.unit)) map.set(g.unit, { unit: g.unit, pos: [], bills: [] });
+    const u = map.get(g.unit);
+    u.pos.push(g);
+    u.bills.push(...g.bills);
+  });
+  const units = [...map.values()].map((u) => ({
+    ...u,
+    total: { ...sumOf(u.bills), billCount: u.bills.length },
+  }));
+  // Keep the order of the Group dropdown (SIEC, ST), unassigned last.
+  const rank = (u) => {
+    const i = PO_GROUPS.indexOf(u.unit);
+    return i === -1 ? PO_GROUPS.length : i;
+  };
+  units.sort((a, b) => rank(a) - rank(b));
+  return units;
+}
+
 // ---------------------------------------------------------------------------
 // Exports (kept in this file so only one file needs to change)
 // ---------------------------------------------------------------------------
@@ -83,35 +109,52 @@ const EXPORT_HEADERS = [
   "Days Due",
 ];
 
-// Flatten groups into table rows tagged by kind: "po" | "bill" | "total" | "grand".
-function buildExportRows(groups, grand) {
+// Flatten units into table rows tagged by kind:
+// "po" | "bill" | "total" | "unitTotal" | "grand".
+function buildExportRows(units, grand) {
   const out = [];
-  groups.forEach((g) => {
-    out.push({ kind: "po", cells: [poHeading(g), "", "", "", "", ""] });
-    g.bills.forEach((b) =>
+  const empty = ["", "", "", "", ""];
+  units.forEach((u) => {
+    u.pos.forEach((g) => {
+      out.push({ kind: "po", cells: [poHeading(g), ...empty] });
+      g.bills.forEach((b) =>
+        out.push({
+          kind: "bill",
+          cells: [
+            b.billNo,
+            fmtDate(b.billDate),
+            fmtNum(b.netReceivable, 0),
+            fmtNum(b.paymentReceived, 0),
+            fmtNum(b.balanceToReceive, 0),
+            b.daysDue ?? "-",
+          ],
+        })
+      );
       out.push({
-        kind: "bill",
+        kind: "total",
         cells: [
-          b.billNo,
-          fmtDate(b.billDate),
-          fmtNum(b.netReceivable, 0),
-          fmtNum(b.paymentReceived, 0),
-          fmtNum(b.balanceToReceive, 0),
-          b.daysDue ?? "-",
+          "Total",
+          "",
+          fmtNum(g.total.netReceivable, 0),
+          fmtNum(g.total.paymentReceived, 0),
+          fmtNum(g.total.balanceToReceive, 0),
+          "",
         ],
-      })
-    );
-    out.push({
-      kind: "total",
-      cells: [
-        "Total",
-        "",
-        fmtNum(g.total.netReceivable, 0),
-        fmtNum(g.total.paymentReceived, 0),
-        fmtNum(g.total.balanceToReceive, 0),
-        "",
-      ],
+      });
     });
+    if (units.length > 1) {
+      out.push({
+        kind: "unitTotal",
+        cells: [
+          `Total — ${unitLabel(u.unit)}`,
+          "",
+          fmtNum(u.total.netReceivable, 0),
+          fmtNum(u.total.paymentReceived, 0),
+          fmtNum(u.total.balanceToReceive, 0),
+          "",
+        ],
+      });
+    }
   });
   out.push({
     kind: "grand",
@@ -131,8 +174,8 @@ function stamp() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function exportToExcel(groups, grand) {
-  const rows = buildExportRows(groups, grand);
+function exportToExcel(units, grand) {
+  const rows = buildExportRows(units, grand);
   const ws = XLSX.utils.aoa_to_sheet([EXPORT_HEADERS, ...rows.map((r) => r.cells)]);
   ws["!cols"] = [
     { wch: 18 },
@@ -147,10 +190,10 @@ function exportToExcel(groups, grand) {
   XLSX.writeFile(wb, `Pending-Payments-${stamp()}.xlsx`);
 }
 
-async function exportToPDF(groups, grand, company) {
+async function exportToPDF(units, grand, company) {
   const { default: jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
-  const rows = buildExportRows(groups, grand);
+  const rows = buildExportRows(units, grand);
 
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
   drawPdfCompany(doc, company);
@@ -158,7 +201,7 @@ async function exportToPDF(groups, grand, company) {
   doc.setFont(undefined, "normal");
   doc.text("Pending Payments Report", 40, 40);
   doc.setFontSize(9);
-  doc.text(`POs: ${groups.length}`, 40, 58);
+  doc.text(`POs: ${units.reduce((n, u) => n + u.pos.length, 0)}`, 40, 58);
 
   autoTable(doc, {
     head: [EXPORT_HEADERS],
@@ -189,7 +232,7 @@ async function exportToPDF(groups, grand, company) {
       if (kind === "po") {
         data.cell.styles.fontStyle = "bold";
         data.cell.styles.fillColor = [235, 235, 235];
-      } else if (kind === "total" || kind === "grand") {
+      } else if (kind === "total" || kind === "unitTotal" || kind === "grand") {
         data.cell.styles.fontStyle = "bold";
       }
     },
@@ -263,6 +306,7 @@ export default function PendingPayments() {
   }, [allData]);
 
   const groups = useMemo(() => groupByPO(visibleBills, pmByPoId), [visibleBills, pmByPoId]);
+  const units = useMemo(() => groupByUnit(groups), [groups]);
 
   // Grand total follows the filters, so it always matches what is on screen.
   const grand = useMemo(
@@ -272,14 +316,14 @@ export default function PendingPayments() {
 
   function handleExportExcel() {
     if (!report) return;
-    exportToExcel(groups, grand);
+    exportToExcel(units, grand);
   }
 
   async function handleExportPdf() {
     if (!report) return;
     setExportingPdf(true);
     try {
-      await exportToPDF(groups, grand, group);
+      await exportToPDF(units, grand, group);
     } finally {
       setExportingPdf(false);
     }
@@ -414,7 +458,10 @@ export default function PendingPayments() {
               </tr>
             </thead>
             <tbody>
-              {groups.map((g) => (
+              {units.map((u) => (
+                <Fragment key={`unit-${u.unit}`}>
+
+              {u.pos.map((g) => (
                 <Fragment key={g.poId}>
                   {/* 1. PO heading */}
                   <tr style={poRowStyle} onClick={() => navigate(`/po/${g.poId}`)}>
@@ -464,6 +511,27 @@ export default function PendingPayments() {
                     </td>
                     <td></td>
                   </tr>
+                </Fragment>
+              ))}
+
+                  {/* 4. Total for this unit (only when several units are shown) */}
+                  {units.length > 1 && (
+
+                    <tr style={totalRowStyle}>
+                      <td>Total — {unitLabel(u.unit)}</td>
+                      <td></td>
+                      <td className="text-right tabular text-rivet2">
+                        {fmtNum(u.total.netReceivable, 0)}
+                      </td>
+                      <td className="text-right tabular">
+                        {fmtNum(u.total.paymentReceived, 0)}
+                      </td>
+                      <td className="text-right tabular text-warn">
+                        {fmtNum(u.total.balanceToReceive, 0)}
+                      </td>
+                      <td></td>
+                    </tr>
+                  )}
                 </Fragment>
               ))}
             </tbody>

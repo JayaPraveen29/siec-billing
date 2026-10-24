@@ -5,6 +5,7 @@ import { useRef } from "react";
 //   value     : raw numeric string/number (no commas), e.g. "100000.5"
 //   onChange  : (raw) => void   - raw string without commas
 //   onBlur    : (raw) => void   - raw string without commas
+//   allowNA   : also accept the text "NA" (passed to onChange/onBlur as "NA")
 // All other props (className, title, autoFocus, onKeyDown, placeholder...)
 // are passed through to the <input>.
 
@@ -38,12 +39,20 @@ export default function IndianNumberInput({
   onChange,
   onBlur,
   maxDecimals = 2,
+  allowNA = false, // let the user type the text "NA" instead of a number
   ...rest
 }) {
   const ref = useRef(null);
 
+  const isText = allowNA && /^[A-Za-z]/.test(String(value ?? ""));
+
   function handleChange(e) {
     const el = e.target;
+    if (allowNA && /[A-Za-z]/.test(el.value)) {
+      // Alphabetical entry: only "NA" is meaningful, keep up to 2 letters.
+      onChange?.(el.value.replace(/[^A-Za-z]/g, "").toUpperCase().slice(0, 2));
+      return;
+    }
     const caret = el.selectionStart ?? el.value.length;
     // Count significant characters (digits, dot, minus) before the caret.
     const sig = el.value.slice(0, caret).replace(/[^0-9.-]/g, "").length;
@@ -85,9 +94,15 @@ export default function IndianNumberInput({
       type="text"
       inputMode="decimal"
       autoComplete="off"
-      value={groupIndian(value)}
+      value={isText ? String(value).toUpperCase() : groupIndian(value)}
       onChange={handleChange}
-      onBlur={(e) => onBlur?.(clean(e.target.value))}
+      onBlur={(e) =>
+        onBlur?.(
+          allowNA && /[A-Za-z]/.test(e.target.value)
+            ? e.target.value.replace(/[^A-Za-z]/g, "").toUpperCase()
+            : clean(e.target.value)
+        )
+      }
     />
   );
 }

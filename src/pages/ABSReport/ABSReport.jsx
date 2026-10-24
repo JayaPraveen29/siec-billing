@@ -173,9 +173,25 @@ export default function ABSReport() {
 function GroupRows({ group }) {
   return (
     <>
+      <tr className="abs-subtotal-row">
+        <td className="text-rivet">{group.po.code}</td>
+        <td colSpan={2}>Subtotal</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.qty, 1)}</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.basic, 0)}</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.gst, 0)}</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.tds, 0)}</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.roundOff, 2)}</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.grossValue, 2)}</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.matAdvance, 0)}</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.netReceivable, 0)}</td>
+        <td></td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.paymentReceived, 0)}</td>
+        <td className="text-right tabular">{fmtNum(group.subtotal.balanceToReceive, 0)}</td>
+        <td></td>
+      </tr>
       {group.rows.map((r, idx) => (
         <tr key={idx}>
-          <td className="text-rivet">{idx === 0 ? group.po.code : ""}</td>
+          <td></td>
           <td>{r.invoiceNo}</td>
           <td>{fmtDate(r.invoiceDate)}</td>
           <td className="text-right tabular">{fmtNum(r.qty, 1)}</td>
@@ -193,24 +209,9 @@ function GroupRows({ group }) {
           <td className={`text-right tabular ${r.balanceToReceive > 0.5 ? "text-warn" : "text-ok"}`}>
             {fmtNum(r.balanceToReceive, 0)}
           </td>
-          <td className="text-right tabular text-muted">{r.days ?? "-"}</td>
+          <td className="text-right tabular text-muted">{r.days ?? ""}</td>
         </tr>
       ))}
-      <tr className="abs-subtotal-row">
-        <td colSpan={3}>Subtotal — {group.po.code}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.qty, 1)}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.basic, 0)}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.gst, 0)}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.tds, 0)}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.roundOff, 2)}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.grossValue, 2)}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.matAdvance, 0)}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.netReceivable, 0)}</td>
-        <td></td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.paymentReceived, 0)}</td>
-        <td className="text-right tabular">{fmtNum(group.subtotal.balanceToReceive, 0)}</td>
-        <td></td>
-      </tr>
     </>
   );
 }

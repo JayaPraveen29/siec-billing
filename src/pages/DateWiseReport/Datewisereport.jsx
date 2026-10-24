@@ -23,7 +23,14 @@ function currentMonthRange() {
   const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth(), 1);
   const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+  // Format from LOCAL date parts. toISOString() converts to UTC, which in
+  // timezones ahead of UTC (e.g. IST, UTC+5:30) pushes local midnight back
+  // to the previous day (1 Oct 00:00 IST -> 30 Sep 18:30 UTC).
+  const ymd = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate()
+    ).padStart(2, "0")}`;
+  return { from: ymd(from), to: ymd(to) };
 }
 
 export default function DateWiseReport() {
@@ -318,7 +325,7 @@ function DayRows({ day }) {
         </tr>
       ))}
       <tr className="datewise-subtotal-row">
-        <td colSpan={3}>Subtotal — {fmtDate(day.date)}</td>
+        <td colSpan={3}>Subtotal</td>
         <td className="text-right tabular">{fmtNum(day.subtotal.qty, 1)}</td>
         <td className="text-right tabular">{fmtNum(day.subtotal.basic, 0)}</td>
         <td className="text-right tabular">{fmtNum(day.subtotal.gst, 0)}</td>

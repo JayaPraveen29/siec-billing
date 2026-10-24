@@ -14,7 +14,7 @@ import {
   updateItem,
   updatePOSheet,
 } from "../../services/poService";
-import { computePOLedger, effectiveMatAdvPercent } from "../../utils/ledger";
+import { computePOLedger, effectiveMatAdvPercent, isMatAdvNA, isNAValue } from "../../utils/ledger";
 import { fmtINR, fmtNum, fmtDate, toInputDate } from "../../utils/format";
 import { exportPOSheetToExcel, exportPOSheetToPDF } from "../../utils/poExport";
 import TitleBlock from "../../components/TitleBlock";
@@ -162,7 +162,17 @@ export default function POSheet() {
 
   async function handlePoMatAdvSave(rawValue) {
     const value = rawValue.trim();
-    await updatePOSheet(id, { openingMatAdvance: value === "" ? 0 : Number(value) || 0 });
+    if (/[A-Za-z]/.test(value)) {
+      // Only "NA" is accepted as text; anything else is ignored.
+      if (isNAValue(value)) {
+        await updatePOSheet(id, { matAdvNA: true, openingMatAdvance: 0 });
+      }
+    } else {
+      await updatePOSheet(id, {
+        matAdvNA: false,
+        openingMatAdvance: value === "" ? 0 : Number(value) || 0,
+      });
+    }
     setPoMatAdvDraft("");
     setEditingPoMatAdv(false);
   }
@@ -191,8 +201,12 @@ export default function POSheet() {
 
   async function handleMatAdvChange(invoiceId, rawValue) {
     const value = rawValue.trim();
+    if (/[A-Za-z]/.test(value) && !isNAValue(value)) {
+      cancelEditingMatAdv(invoiceId); // only "NA" is accepted as text
+      return;
+    }
     await updateInvoice(id, invoiceId, {
-      matAdvanceOverride: value === "" ? "" : Number(value),
+      matAdvanceOverride: isNAValue(value) ? "NA" : value === "" ? "" : Number(value),
     });
     setMatAdvDrafts((prev) => {
       const next = { ...prev };
@@ -340,7 +354,8 @@ export default function POSheet() {
     const totalInvoiceValue = Math.round(basic + gst);
     const roundOff = totalInvoiceValue - basic - gst;
     // Manual entry (Opening Mat. Advance) - not calculated from the %.
-    const matAdvance = n(po.openingMatAdvance);
+    // "NA" POs take no material advance.
+    const matAdvance = isMatAdvNA(po) ? 0 : n(po.openingMatAdvance);
     const tds = Math.ceil(basic * (n(po.tdsPercent) / 100) - Number.EPSILON);
     return {
       qty,
@@ -738,6 +753,7 @@ export default function POSheet() {
                             <IndianNumberInput
                               autoFocus
                               value={poMatAdvDraft}
+                              allowNA
                               onChange={(v) => setPoMatAdvDraft(v)}
                               onFocus={(e) => e.target.select()}
                               onBlur={(v) => handlePoMatAdvSave(v)}
@@ -749,19 +765,23 @@ export default function POSheet() {
                                 }
                               }}
                               className="input po-unit-rate-input"
-                              title="Total material advance for this PO"
+                              title="Total material advance for this PO. Type NA if no material advance is taken"
                             />
                           </td>
                         ) : (
                           <td
                             className="text-right tabular po-unit-rate-display"
                             onDoubleClick={() => {
-                              setPoMatAdvDraft(po.openingMatAdvance ?? "");
+                              setPoMatAdvDraft(isMatAdvNA(po) ? "NA" : po.openingMatAdvance ?? "");
                               setEditingPoMatAdv(true);
                             }}
                             title="Double-click to enter / edit"
                           >
-                            {poLevelTotal ? fmtNum(poLevelTotal, 0) : "-"}
+                            {isMatAdvNA(po)
+                              ? "NA"
+                              : poLevelTotal
+                              ? fmtNum(poLevelTotal, 0)
+                              : "-"}
                           </td>
                         )
                       ) : (
@@ -838,6 +858,7 @@ export default function POSheet() {
                               <td key={inv.id} className="text-right tabular">
                                 <IndianNumberInput
                                   autoFocus
+                                  allowNA
                                   value={value}
                                   onChange={(v) =>
                                     setMatAdvDrafts((prev) => ({
@@ -852,7 +873,7 @@ export default function POSheet() {
                                     if (e.key === "Escape") cancelEditingMatAdv(inv.id);
                                   }}
                                   className="input po-unit-rate-input"
-                                  title={`Leave blank for the full ${effectiveMatAdvPercent(po)}% of Basic; a smaller value is used as entered, a larger one is capped`}
+                                  title={`Leave blank for ${effectiveMatAdvPercent(po)}% of Basic (limited to the advance balance). Any amount entered is used as is (can exceed ${effectiveMatAdvPercent(po)}%). Type NA for none`}
                                 />
                               </td>
                             );
@@ -863,9 +884,11 @@ export default function POSheet() {
                               key={inv.id}
                               className="text-right tabular po-unit-rate-display"
                               onDoubleClick={() => startEditingMatAdv(inv)}
-                              title={`Auto ${effectiveMatAdvPercent(po)}% of Basic. Double-click to enter a smaller amount (blank = auto)`}
+                              title={`Auto ${effectiveMatAdvPercent(po)}% of Basic (up to the advance balance). Double-click to enter an amount or NA (blank = auto)`}
                             >
-                              {effectiveMatAdv && effectiveMatAdv !== 0
+                              {r?.matAdvanceNA
+                                ? "NA"
+                                : effectiveMatAdv && effectiveMatAdv !== 0
                                 ? fmtNum(effectiveMatAdv, 0)
                                 : "-"}
                             </td>
@@ -1102,7 +1125,7 @@ function PoSettingsModal({ po, onCancel, onSave }) {
     unitRate: po.unitRate ?? "",
     gstPercent: po.gstPercent ?? "",
     tdsPercent: po.tdsPercent ?? "",
-    openingMatAdvance: po.openingMatAdvance ?? "",
+    openingMatAdvance: isMatAdvNA(po) ? "NA" : po.openingMatAdvance ?? "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -1119,7 +1142,11 @@ function PoSettingsModal({ po, onCancel, onSave }) {
         tdsPercent: Number(form.tdsPercent) || 0,
         // matAdvPercent is not sent, so the PO's stored % (the per-invoice
         // cap) is left untouched.
-        openingMatAdvance: Number(form.openingMatAdvance) || 0,
+        // "NA" = no material advance on this PO.
+        matAdvNA: isNAValue(form.openingMatAdvance),
+        openingMatAdvance: isNAValue(form.openingMatAdvance)
+          ? 0
+          : Number(form.openingMatAdvance) || 0,
       });
     } finally {
       setSaving(false);
@@ -1208,8 +1235,9 @@ function PoSettingsModal({ po, onCancel, onSave }) {
         </div>
 
         <label style={{ display: "block", marginTop: "0.75rem" }}>
-          <span className="field-label">Material Advance (₹)</span>
+          <span className="field-label">Material Advance (₹) — type NA if none is taken</span>
           <IndianNumberInput
+            allowNA
             value={form.openingMatAdvance}
             onChange={(v) => setForm({ ...form, openingMatAdvance: v })}
             className="input"
@@ -1467,7 +1495,11 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
       invoiceNo: invoiceNo.trim(),
       invoiceDate: isoInvoiceDate,
       allocations: cleanAllocations,
-      matAdvanceOverride: matAdvanceOverride === "" ? "" : Number(matAdvanceOverride),
+      matAdvanceOverride: isNAValue(matAdvanceOverride)
+        ? "NA"
+        : matAdvanceOverride === "" || /[A-Za-z]/.test(String(matAdvanceOverride))
+        ? ""
+        : Number(matAdvanceOverride),
       tdsOverride: tdsOverride === "" ? "" : Number(tdsOverride),
       roundOffOverride: roundOffOverride === "" ? "" : Number(roundOffOverride),
     });
@@ -1510,9 +1542,10 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
         </div>
 
         <label style={{ display: "block", marginBottom: "0.75rem" }}>
-          <span className="field-label">Material Advance (₹) — only if less than the PO's Mat. Adv. % of Basic</span>
+          <span className="field-label">Material Advance (₹) — leave blank for the standard % of Basic, enter an amount to override, or type NA</span>
           <IndianNumberInput
-            placeholder="Leave blank to take the full Mat. Adv. % of Basic"
+            allowNA
+            placeholder="Blank = standard Mat. Adv. % of Basic"
             value={matAdvanceOverride}
             onChange={(v) => setMatAdvanceOverride(v)}
             className="input"

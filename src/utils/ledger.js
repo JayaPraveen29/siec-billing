@@ -16,6 +16,16 @@ export function effectiveMatAdvPercent(po) {
   return Math.min(Math.max(pct, 0), 100);
 }
 
+/** True for the text "NA" (any case) — "no material advance" marker. */
+export function isNAValue(v) {
+  return String(v ?? "").trim().toUpperCase() === "NA";
+}
+
+/** True when the PO has no material advance at all (small orders): "NA". */
+export function isMatAdvNA(po) {
+  return po?.matAdvNA === true || isNAValue(po?.matAdvNA);
+}
+
 export function roundHalf(n) {
   return Math.round((n + Number.EPSILON) * 1) / 1;
 }
@@ -43,6 +53,7 @@ export function computePOLedger(po, items, invoices) {
   // blow up the totals.
   const matAdvPercent = effectiveMatAdvPercent(po);
   const openingMatAdvance = num(po.openingMatAdvance);
+  const poNA = isMatAdvNA(po);
 
   const sortedInvoices = [...invoices].sort((a, b) => {
     const da = a.invoiceDate ? new Date(a.invoiceDate).getTime() : Infinity;
@@ -70,20 +81,36 @@ export function computePOLedger(po, items, invoices) {
         ? num(inv.roundOffOverride)
         : totalInvoiceValue - basic - gst;
 
-    // Material Advance = the PO's Mat. Adv. % of Basic Value (e.g. 20%), unless
-    // a smaller amount is entered manually for that invoice (double-click):
-    //   blank           -> full cap (Basic x %), same as the original auto calc
-    //   entered <  cap  -> the entered value as-is
-    //   entered >= cap  -> capped at the cap
+    // Material Advance (recovery against this bill):
+    //   NA (PO-level or on this invoice) -> no material advance, 0.
+    //   manual value entered             -> used exactly as entered. It may be
+    //                                       above the standard % (e.g. the last
+    //                                       bill when no supplies are pending).
+    //   blank (auto)                     -> the standard % of Basic (20%), but
+    //                                       never more than the advance still
+    //                                       to be recovered (Total Mat. Adv.
+    //                                       received - recovered up to the last
+    //                                       bill), so a smaller advance is
+    //                                       recovered only up to its balance.
     // The field name `matAdvanceOverride` is kept so stored data keeps working.
     const matAdvanceCap = Math.round(basic * (matAdvPercent / 100));
+    const invNA = isNAValue(inv.matAdvanceOverride);
+    const matAdvanceNA = poNA || invNA;
     const hasManualMatAdv =
+      !invNA &&
       inv.matAdvanceOverride !== undefined &&
       inv.matAdvanceOverride !== "" &&
       inv.matAdvanceOverride !== null;
-    const matAdvance = hasManualMatAdv
-      ? Math.min(num(inv.matAdvanceOverride), matAdvanceCap)
-      : matAdvanceCap;
+    let matAdvance;
+    if (matAdvanceNA) {
+      matAdvance = 0;
+    } else if (hasManualMatAdv) {
+      matAdvance = num(inv.matAdvanceOverride);
+    } else if (openingMatAdvance > 0) {
+      matAdvance = Math.min(matAdvanceCap, Math.max(runningMatAdvBal, 0));
+    } else {
+      matAdvance = matAdvanceCap;
+    }
 
     const tds =
       inv.tdsOverride !== undefined && inv.tdsOverride !== ""
@@ -115,6 +142,7 @@ export function computePOLedger(po, items, invoices) {
       totalInvoiceValue,
       matAdvance,
       matAdvanceCap,
+      matAdvanceNA,
       tds,
       netReceivable,
       paymentReceived,
@@ -170,6 +198,7 @@ export function computePOLedger(po, items, invoices) {
     totals,
     matAdvanceBalance: runningMatAdvBal,
     openingMatAdvance,
+    matAdvNA: poNA,
   };
 }
 
@@ -228,8 +257,25 @@ export function computeABSReport(poSheets) {
       }
     );
 
-    return { po, rows, subtotal };
+    // Progress status used to order the report:
+    //   0 = completed   (invoices raised for the full PO qty and all settled)
+    //   1 = in progress (some invoicing / payment activity, not complete)
+    //   2 = unattempted (no invoices raised yet)
+    let status = 1;
+    if (ledger.invoiceRows.length === 0) {
+      status = 2;
+    } else if (
+      Math.abs(ledger.totals.balanceQty) < 0.001 &&
+      ledger.invoiceRows.every((r) => !r.isUnpaid)
+    ) {
+      status = 0;
+    }
+
+    return { po, rows, subtotal, status };
   });
+
+  // Completed first, then in-progress, then unattempted (stable within each).
+  groups.sort((a, b) => a.status - b.status);
 
   const grandTotal = groups.reduce(
     (acc, g) => {

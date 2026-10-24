@@ -34,16 +34,14 @@ export const PAYMENT_STATUS_LABELS = {
 export const AGE_BUCKETS = [
   { value: "all", label: "All Days Due" },
   { value: "0-30", label: "0 – 30 days" },
-  { value: "31-60", label: "31 – 60 days" },
-  { value: "61-90", label: "61 – 90 days" },
-  { value: "90+", label: "Over 90 days" },
+  { value: "31-45", label: "31 – 45 days" },
+  { value: "46+", label: "46 days & above" },
 ];
 
 export function ageClass(days) {
   if (days == null) return "";
-  if (days > 90) return "age-90";
-  if (days > 60) return "age-60";
-  if (days > 30) return "age-30";
+  if (days > 45) return "age-60"; // 46 & above
+  if (days > 30) return "age-30"; // 31 – 45
   return "";
 }
 
@@ -52,12 +50,10 @@ function inBucket(days, bucket) {
   switch (bucket) {
     case "0-30":
       return days <= 30;
-    case "31-60":
-      return days >= 31 && days <= 60;
-    case "61-90":
-      return days >= 61 && days <= 90;
-    case "90+":
-      return days > 90;
+    case "31-45":
+      return days >= 31 && days <= 45;
+    case "46+":
+      return days >= 46;
     default:
       return true;
   }
@@ -79,6 +75,7 @@ export function computePendingPaymentsReport(poSheets) {
         poId: po.id,
         poCode: po.code,
         poNumber: po.poNumber,
+        unit: po.group || "",
         projectManager: po.projectManager || "",
         billNo: inv.invoiceNo,
         billDate: inv.invoiceDate,
@@ -137,7 +134,7 @@ export function filterPendingRows(
   const term = (search || "").trim().toLowerCase();
   return rows.filter((r) => {
     if (term) {
-      const hay = `${r.billNo} ${r.poCode} ${r.poNumber} ${r.projectManager}`.toLowerCase();
+      const hay = `${r.billNo} ${r.poCode} ${r.poNumber} ${r.projectManager} ${r.unit}`.toLowerCase();
       if (!hay.includes(term)) return false;
     }
     if (fromDate || toDate) {

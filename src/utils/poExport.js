@@ -10,7 +10,7 @@
 // on-screen table in POSheet.jsx, rather than two separate tables.
 
 import * as XLSX from "xlsx";
-import { effectiveMatAdvPercent } from "./ledger";
+import { effectiveMatAdvPercent, isMatAdvNA } from "./ledger";
 import { fmtNum, fmtDate, fmtToday, drawPdfCompany } from "./format";
 
 // Same palette as src/styles/variables.css, used to color specific
@@ -116,9 +116,10 @@ function buildMatrix(po, ledger) {
       cells: [
         def.no,
         def.label,
-        def.isDate ? "" : rowTotal,
+        def.isDate ? "" : def.no === 6 && isMatAdvNA(po) ? "NA" : rowTotal,
         ...invoices.map((inv) => {
           const val = def.getVal(inv);
+          if (def.no === 6 && inv.matAdvanceNA) return "NA";
           return def.isDate ? fmtDate(val) : num(val);
         }),
         def.unitRateRow || def.isDate ? "" : rowTotal,

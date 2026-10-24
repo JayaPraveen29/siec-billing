@@ -69,6 +69,10 @@ export function computePOWiseReport(poSheets) {
     };
   });
 
+  // Fully billed first, then partially billed (in progress), then not started.
+  const QTY_ORDER = { "fully-billed": 0, "in-progress": 1, "not-started": 2, "no-items": 3 };
+  rows.sort((a, b) => QTY_ORDER[a.qtyStatus] - QTY_ORDER[b.qtyStatus]);
+
   const grandTotal = rows.reduce(
     (acc, r) => {
       acc.weightOrdered += r.weightOrdered;

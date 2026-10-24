@@ -13,9 +13,16 @@ function num(v) {
 
 function dayKey(d) {
   if (!d) return null;
-  const date = new Date(d);
+  // Plain yyyy-mm-dd strings are used as-is (no timezone shifting).
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d));
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  const date = typeof d.toDate === "function" ? d.toDate() : new Date(d);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString().slice(0, 10); // YYYY-MM-DD, sorts naturally
+  // Use LOCAL date parts — toISOString() is UTC and shifts the day back
+  // by one in timezones ahead of UTC (e.g. IST).
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate()
+  ).padStart(2, "0")}`; // YYYY-MM-DD, sorts naturally
 }
 
 const emptyTotals = () => ({

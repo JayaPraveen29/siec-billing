@@ -41,9 +41,27 @@ export function exportABSReportToExcel(report, filename = `ABS-Report-${stamp()}
   const rows = [HEADERS];
 
   report.groups.forEach((g) => {
-    g.rows.forEach((r, idx) => {
+    rows.push([
+      g.po.code,
+      "Subtotal",
+      "",
+      Number(g.subtotal.qty) || 0,
+      Number(g.subtotal.basic) || 0,
+      Number(g.subtotal.gst) || 0,
+      Number(g.subtotal.tds) || 0,
+      Number(g.subtotal.roundOff) || 0,
+      Number(g.subtotal.grossValue) || 0,
+      Number(g.subtotal.matAdvance) || 0,
+      Number(g.subtotal.netReceivable) || 0,
+      "",
+      Number(g.subtotal.paymentReceived) || 0,
+      Number(g.subtotal.balanceToReceive) || 0,
+      "",
+    ]);
+
+    g.rows.forEach((r) => {
       rows.push([
-        idx === 0 ? g.po.code : "",
+        "",
         r.invoiceNo,
         fmtDate(r.invoiceDate),
         Number(r.qty) || 0,
@@ -60,24 +78,6 @@ export function exportABSReportToExcel(report, filename = `ABS-Report-${stamp()}
         r.days ?? "",
       ]);
     });
-
-    rows.push([
-      `Subtotal — ${g.po.code}`,
-      "",
-      "",
-      Number(g.subtotal.qty) || 0,
-      Number(g.subtotal.basic) || 0,
-      Number(g.subtotal.gst) || 0,
-      Number(g.subtotal.tds) || 0,
-      Number(g.subtotal.roundOff) || 0,
-      Number(g.subtotal.grossValue) || 0,
-      Number(g.subtotal.matAdvance) || 0,
-      Number(g.subtotal.netReceivable) || 0,
-      "",
-      Number(g.subtotal.paymentReceived) || 0,
-      Number(g.subtotal.balanceToReceive) || 0,
-      "",
-    ]);
   });
 
   rows.push([
@@ -151,28 +151,9 @@ export async function exportABSReportToPDF(
 
   const body = [];
   report.groups.forEach((g) => {
-    g.rows.forEach((r, idx) => {
-      body.push([
-        idx === 0 ? g.po.code : "",
-        r.invoiceNo ?? "",
-        fmtDate(r.invoiceDate),
-        fmtNum(r.qty, 1),
-        fmtNum(r.basic, 0),
-        fmtNum(r.gst, 0),
-        fmtNum(r.tds, 0),
-        fmtNum(r.roundOff, 2),
-        fmtNum(r.grossValue, 2),
-        fmtNum(r.matAdvance, 0),
-        fmtNum(r.netReceivable, 0),
-        fmtDate(r.paymentDate),
-        fmtNum(r.paymentReceived, 0),
-        fmtNum(r.balanceToReceive, 0),
-        r.days ?? "-",
-      ]);
-    });
-
     body.push([
-      { content: `Subtotal — ${g.po.code}`, colSpan: 3 },
+      g.po.code,
+      { content: "Subtotal", colSpan: 2 },
       fmtNum(g.subtotal.qty, 1),
       fmtNum(g.subtotal.basic, 0),
       fmtNum(g.subtotal.gst, 0),
@@ -186,6 +167,26 @@ export async function exportABSReportToPDF(
       fmtNum(g.subtotal.balanceToReceive, 0),
       "",
     ]);
+
+    g.rows.forEach((r) => {
+      body.push([
+        "",
+        r.invoiceNo ?? "",
+        fmtDate(r.invoiceDate),
+        fmtNum(r.qty, 1),
+        fmtNum(r.basic, 0),
+        fmtNum(r.gst, 0),
+        fmtNum(r.tds, 0),
+        fmtNum(r.roundOff, 2),
+        fmtNum(r.grossValue, 2),
+        fmtNum(r.matAdvance, 0),
+        fmtNum(r.netReceivable, 0),
+        fmtDate(r.paymentDate),
+        fmtNum(r.paymentReceived, 0),
+        fmtNum(r.balanceToReceive, 0),
+        r.days ?? "",
+      ]);
+    });
   });
 
   autoTable(doc, {
