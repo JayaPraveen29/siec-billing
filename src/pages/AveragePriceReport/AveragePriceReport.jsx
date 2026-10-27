@@ -8,6 +8,7 @@ import {
   sumAveragePriceRows,
   bucketRate,
 } from "../../utils/averagePriceReport";
+import { fyLabel, listFinancialYears } from "../../utils/financialYear";
 import { PO_GROUPS, matchesGroup, matchesWorkType } from "../../utils/groups";
 import { fmtNum, fmtINR, fmtToday, companyName, drawPdfCompany } from "../../utils/format";
 import GroupSelect, { WorkTypeSelect } from "../../components/GroupSelect";
@@ -24,9 +25,9 @@ const LEAD = ["Section", "Weight (MT)", "Rate (Rs/MT)", "Basic"];
 const SUB = ["MT", "Invoice Value", "Rate/MT"];
 const TOTALS = ["Total MT", "Total Inv. Value", "Avg Rate"];
 
-function cells(r) {
+function cells(r, units = PO_GROUPS) {
   const out = [r.section, fmtNum(r.weightMT), fmtNum(r.rate), fmtNum(r.basic)];
-  PO_GROUPS.forEach((g) => {
+  units.forEach((g) => {
     const b = r.buckets[g];
     out.push(fmtNum(b.mt), fmtNum(b.value), b.mt > 0 ? fmtNum(bucketRate(b)) : "-");
   });
@@ -64,29 +65,32 @@ function exportToExcel(rows, total) {
   XLSX.writeFile(wb, `Average-Price-Report-${stamp()}.xlsx`);
 }
 
-async function exportToPDF(rows, total, company) {
+async function exportToPDF(rows, total, company, fy) {
+  // Only the selected company's block is printed: Group = ST drops the SIEC
+  // columns (and vice versa). With no Group selected, every block is printed.
+  const units = PO_GROUPS.includes(company) ? [company] : PO_GROUPS;
   const { default: jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
   drawPdfCompany(doc, company);
   doc.setFontSize(11);
   doc.setFont(undefined, "normal");
-  doc.text("Average Price Report", 40, 40);
+  doc.text(`Average Price Report${fy !== "all" ? ` - FY ${fyLabel(Number(fy))}` : ""}`, 40, 40);
   doc.setFontSize(9);
   doc.text(`Sections: ${rows.length}`, 40, 58);
 
   const head = [
     [
       ...LEAD.map((h) => ({ content: h, rowSpan: 2, styles: { valign: "middle" } })),
-      ...PO_GROUPS.map((g) => ({ content: g, colSpan: 3, styles: { halign: "center" } })),
+      ...units.map((g) => ({ content: g, colSpan: 3, styles: { halign: "center" } })),
       { content: "Totals", colSpan: 3, styles: { halign: "center" } },
     ],
-    [...SUB, ...SUB, ...TOTALS],
+    [...units.flatMap(() => SUB), ...TOTALS],
   ];
   autoTable(doc, {
     head,
-    body: rows.map((r) => cells(r).map(String)),
-    foot: [cells(total).map(String)],
+    body: rows.map((r) => cells(r, units).map(String)),
+    foot: [cells(total, units).map(String)],
     startY: 72,
     margin: { left: 30, right: 30 },
     theme: "grid",
@@ -103,7 +107,7 @@ async function exportToPDF(rows, total, company) {
     footStyles: { fillColor: false, textColor: 20, fontStyle: "bold", lineWidth: 0.5 },
     alternateRowStyles: { fillColor: false },
     columnStyles: Object.fromEntries(
-      Array.from({ length: LEAD.length + PO_GROUPS.length * 3 + 3 - 1 }, (_, i) => [
+      Array.from({ length: LEAD.length + units.length * 3 + 3 - 1 }, (_, i) => [
         i + 1,
         { halign: "right" },
       ])
@@ -123,6 +127,7 @@ export default function AveragePriceReport() {
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState("all");
   const [workType, setWorkType] = useState("all");
+  const [fy, setFy] = useState("all");
 
   async function load() {
     setLoading(true);
@@ -135,14 +140,17 @@ export default function AveragePriceReport() {
     load();
   }, []);
 
+  const fyOptions = useMemo(() => listFinancialYears(allData), [allData]);
+
   const report = useMemo(() => {
     if (!allData) return null;
     return computeAveragePriceReport(
       allData.filter(
         (d) => matchesGroup(d.po.group, group) && matchesWorkType(d.po.workType, workType)
-      )
+      ),
+      { fy }
     );
-  }, [allData, group, workType]);
+  }, [allData, group, workType, fy]);
 
   const visibleRows = useMemo(
     () => (report ? filterAveragePriceRows(report.rows, { search }) : []),
@@ -156,7 +164,7 @@ export default function AveragePriceReport() {
     if (!report) return;
     setExportingPdf(true);
     try {
-      await exportToPDF(visibleRows, total, group);
+      await exportToPDF(visibleRows, total, group, fy);
     } finally {
       setExportingPdf(false);
     }
@@ -166,6 +174,7 @@ export default function AveragePriceReport() {
     setSearch("");
     setGroup("all");
     setWorkType("all");
+    setFy("all");
   }
 
   return (
@@ -173,7 +182,7 @@ export default function AveragePriceReport() {
       <div className="avgp-header">
         <TitleBlock
           company={companyName(group)}
-          docType="AVERAGE PRICE REPORT"
+          docType={`AVERAGE PRICE REPORT${fy !== "all" ? ` · FY ${fyLabel(Number(fy))}` : ""}`}
           fields={[
             { label: "Sections", value: report ? visibleRows.length : "—" },
             { label: "Generated", value: fmtToday() },
@@ -217,7 +226,15 @@ export default function AveragePriceReport() {
         </div>
         <GroupSelect value={group} onChange={setGroup} />
         <WorkTypeSelect value={workType} onChange={setWorkType} />
-        {(search || group !== "all" || workType !== "all") && (
+        <select value={fy} onChange={(e) => setFy(e.target.value)}>
+          <option value="all">Financial Year</option>
+          {fyOptions.map((y) => (
+            <option key={y} value={y}>
+              FY {fyLabel(y)}
+            </option>
+          ))}
+        </select>
+        {(search || group !== "all" || workType !== "all" || fy !== "all") && (
           <button type="button" className="avgp-clear" onClick={clearFilters}>
             Clear filters
           </button>

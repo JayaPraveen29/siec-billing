@@ -10,6 +10,7 @@
 
 import { computePOLedger } from "./ledger";
 import { PO_GROUPS } from "./groups";
+import { inFinancialYear } from "./financialYear";
 
 function num(v) {
   const n = Number(v);
@@ -22,12 +23,22 @@ function normName(s) {
 
 const emptyBucket = () => ({ mt: 0, value: 0 });
 
-/** @param {Array} poSheets - [{ po, items, invoices }] */
-export function computeAveragePriceReport(poSheets) {
+/**
+ * @param {Array} poSheets - [{ po, items, invoices }]
+ * @param {{ fy?: string|number }} [opts] - fy: "all" or an FY start year.
+ *   With an FY selected only invoices dated inside it are counted (billed MT /
+ *   value), and only POs billed in that FY appear (their ordered Weight /
+ *   Rate / Basic is the full PO).
+ */
+export function computeAveragePriceReport(poSheets, { fy = "all" } = {}) {
   const map = new Map();
 
   poSheets.forEach(({ po, items, invoices }) => {
-    const ledger = computePOLedger(po, items || [], invoices || []);
+    const fyInvoices = (invoices || []).filter((inv) =>
+      inFinancialYear(inv.invoiceDate, fy)
+    );
+    if (fy !== "all" && fyInvoices.length === 0) return;
+    const ledger = computePOLedger(po, items || [], fyInvoices);
     const unitRate = num(po.unitRate);
     const bucketKey = PO_GROUPS.includes(po.group) ? po.group : "other";
 
