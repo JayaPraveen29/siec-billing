@@ -13,12 +13,13 @@ import {
   exportPOWiseReportToExcel,
   exportPOWiseReportToPDF,
 } from "../../utils/poWiseExport";
+import GroupSelect, { WorkTypeSelect } from "../../components/GroupSelect";
+import { matchesGroup, matchesWorkType } from "../../utils/groups";
+import { companyName } from "../../utils/format";
 import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import "./POWiseReport.css";
 
-// Options for the "Group" dropdown. Keep in sync with the PO create page.
-const PO_GROUPS = ["SIEC", "ST"];
 
 const QTY_FILTERS = [
   { value: "all", label: "All Quantity Status" },
@@ -43,6 +44,7 @@ export default function POWiseReport() {
 
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState("all");
+  const [workType, setWorkType] = useState("all");
   const [qtyStatus, setQtyStatus] = useState("all");
   const [paymentStatus, setPaymentStatus] = useState("all");
 
@@ -60,9 +62,9 @@ export default function POWiseReport() {
   const report = useMemo(() => {
     if (!allData) return null;
     return computePOWiseReport(
-      allData.filter((d) => group === "all" || d.po.group === group)
+      allData.filter((d) => matchesGroup(d.po.group, group) && matchesWorkType(d.po.workType, workType))
     );
-  }, [allData, group]);
+  }, [allData, group, workType]);
 
   const visibleRows = useMemo(() => {
     if (!report) return [];
@@ -88,6 +90,7 @@ export default function POWiseReport() {
     <div className="powise-page">
       <div className="powise-header">
         <TitleBlock
+          company={companyName(group)}
           docType="PO WISE REPORT"
           fields={[
             { label: "POs", value: report ? report.rows.length : "—" },
@@ -130,14 +133,8 @@ export default function POWiseReport() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <select value={group} onChange={(e) => setGroup(e.target.value)}>
-          <option value="all">Group</option>
-          {PO_GROUPS.map((g) => (
-            <option key={g} value={g}>
-              {g}
-            </option>
-          ))}
-        </select>
+        <GroupSelect value={group} onChange={setGroup} />
+<WorkTypeSelect value={workType} onChange={setWorkType} />
         <select value={qtyStatus} onChange={(e) => setQtyStatus(e.target.value)}>
           {QTY_FILTERS.map((f) => (
             <option key={f.value} value={f.value}>

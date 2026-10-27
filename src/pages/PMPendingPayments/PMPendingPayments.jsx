@@ -10,12 +10,13 @@ import {
   AGE_BUCKETS,
 } from "../../utils/pendingPaymentsReport";
 import { fmtNum, fmtDate, fmtToday, drawPdfCompany } from "../../utils/format";
+import GroupSelect, { WorkTypeSelect } from "../../components/GroupSelect";
+import { matchesGroup, matchesWorkType } from "../../utils/groups";
+import { companyName } from "../../utils/format";
 import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import "./PMPendingPayments.css";
 
-// Options for the "Group" (Unit / Company) dropdown. Keep in sync with the PO create page.
-const PO_GROUPS = ["SIEC", "ST"];
 
 const PAYMENT_FILTERS = [
   { value: "all", label: "All Pending" },
@@ -304,6 +305,7 @@ export default function PMPendingPayments() {
 
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState("all");
+  const [workType, setWorkType] = useState("all");
   // The selected PM lives in the URL (?pm=...) so that opening a PO and coming
   // back with the browser's back button returns to the same PM view.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -352,9 +354,9 @@ export default function PMPendingPayments() {
   const report = useMemo(() => {
     if (!allData) return null;
     return computePendingPaymentsReport(
-      allData.filter((d) => group === "all" || d.po.group === group)
+      allData.filter((d) => matchesGroup(d.po.group, group) && matchesWorkType(d.po.workType, workType))
     );
-  }, [allData, group]);
+  }, [allData, group, workType]);
 
   // Project Managers present in the report (for the dropdown).
   const pmOptions = useMemo(() => {
@@ -412,6 +414,7 @@ export default function PMPendingPayments() {
     setPaymentStatus("all");
     setAgeBucket("all");
     setGroup("all");
+    setWorkType("all");
     setPmFilter("all");
   }
 
@@ -421,7 +424,7 @@ export default function PMPendingPayments() {
     toDate ||
     paymentStatus !== "all" ||
     ageBucket !== "all" ||
-    group !== "all" ||
+    group !== "all" || workType !== "all" ||
     pmFilter !== "all";
 
   const poCount = pms.reduce((n, p) => n + p.pos.length, 0);
@@ -430,6 +433,7 @@ export default function PMPendingPayments() {
     <div className="pmp-page">
       <div className="pmp-header">
         <TitleBlock
+          company={companyName(group)}
           docType="PM WISE PENDING PAYMENTS"
           fields={[
             { label: "PMs", value: report ? pms.length : "—" },
@@ -492,14 +496,8 @@ export default function PMPendingPayments() {
           ))}
           {pmOptions.hasNone && <option value={NO_PM}>Not Assigned</option>}
         </select>
-        <select value={group} onChange={(e) => setGroup(e.target.value)}>
-          <option value="all">Group</option>
-          {PO_GROUPS.map((g) => (
-            <option key={g} value={g}>
-              {g}
-            </option>
-          ))}
-        </select>
+        <GroupSelect value={group} onChange={setGroup} />
+<WorkTypeSelect value={workType} onChange={setWorkType} />
         <select value={ageBucket} onChange={(e) => setAgeBucket(e.target.value)}>
           {AGE_BUCKETS.map((b) => (
             <option key={b.value} value={b.value}>
@@ -586,6 +584,24 @@ export default function PMPendingPayments() {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr>
+                <td>Grand Total</td>
+                <td className="text-right tabular">{poCount}</td>
+                <td className="text-right tabular">{grand.billCount}</td>
+                <td className="text-right tabular text-rivet2">
+                  {fmtNum(grand.netReceivable, 0)}
+                </td>
+                <td className="text-right tabular">{fmtNum(grand.paymentReceived, 0)}</td>
+                <td className="text-right tabular text-warn">
+                  {fmtNum(grand.balanceToReceive, 0)}
+                </td>
+                <td className="text-right tabular">{fmtNum(grand.age30, 0)}</td>
+                <td className="text-right tabular">{fmtNum(grand.age45, 0)}</td>
+                <td className="text-right tabular">{fmtNum(grand.age46, 0)}</td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}
@@ -676,6 +692,20 @@ export default function PMPendingPayments() {
                 </Fragment>
               ))}
             </tbody>
+            <tfoot>
+              <tr>
+                <td>Grand Total</td>
+                <td></td>
+                <td className="text-right tabular text-rivet2">
+                  {fmtNum(grand.netReceivable, 0)}
+                </td>
+                <td className="text-right tabular">{fmtNum(grand.paymentReceived, 0)}</td>
+                <td className="text-right tabular text-warn">
+                  {fmtNum(grand.balanceToReceive, 0)}
+                </td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}

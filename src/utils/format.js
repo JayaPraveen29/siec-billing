@@ -46,7 +46,7 @@ export function fmtToday() {
  * otherwise (all groups) -> "SIEC GROUP".
  */
 export function companyName(group) {
-  return group && group !== "all" ? group : "SIEC GROUP";
+  return group && group !== "all" && group !== "All" ? group : "SIEC GROUP";
 }
 
 export function toInputDate(d) {

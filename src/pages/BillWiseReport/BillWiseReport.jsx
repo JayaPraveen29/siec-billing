@@ -12,12 +12,13 @@ import {
   exportBillWiseReportToExcel,
   exportBillWiseReportToPDF,
 } from "../../utils/billWiseExport";
+import GroupSelect, { WorkTypeSelect } from "../../components/GroupSelect";
+import { matchesGroup, matchesWorkType } from "../../utils/groups";
+import { companyName } from "../../utils/format";
 import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import "./BillWiseReport.css";
 
-// Options for the "Group" dropdown. Keep in sync with the PO create page.
-const PO_GROUPS = ["SIEC", "ST"];
 
 const PAYMENT_FILTERS = [
   { value: "all", label: "All Payment Status" },
@@ -34,6 +35,7 @@ export default function BillWiseReport() {
 
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState("all");
+  const [workType, setWorkType] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("all");
@@ -52,9 +54,9 @@ export default function BillWiseReport() {
   const report = useMemo(() => {
     if (!allData) return null;
     return computeBillWiseReport(
-      allData.filter((d) => group === "all" || d.po.group === group)
+      allData.filter((d) => matchesGroup(d.po.group, group) && matchesWorkType(d.po.workType, workType))
     );
-  }, [allData, group]);
+  }, [allData, group, workType]);
 
   const visibleRows = useMemo(() => {
     if (!report) return [];
@@ -87,12 +89,14 @@ export default function BillWiseReport() {
     setToDate("");
     setPaymentStatus("all");
     setGroup("all");
+    setWorkType("all");
   }
 
   return (
     <div className="billwise-page">
       <div className="billwise-header">
         <TitleBlock
+          company={companyName(group)}
           docType="BILL WISE REPORT"
           fields={[
             { label: "Bills", value: report ? report.rows.length : "—" },
@@ -153,14 +157,8 @@ export default function BillWiseReport() {
             />
           </label>
         </div>
-        <select value={group} onChange={(e) => setGroup(e.target.value)}>
-          <option value="all">Group</option>
-          {PO_GROUPS.map((g) => (
-            <option key={g} value={g}>
-              {g}
-            </option>
-          ))}
-        </select>
+        <GroupSelect value={group} onChange={setGroup} />
+<WorkTypeSelect value={workType} onChange={setWorkType} />
         <select
           value={paymentStatus}
           onChange={(e) => setPaymentStatus(e.target.value)}
@@ -171,7 +169,7 @@ export default function BillWiseReport() {
             </option>
           ))}
         </select>
-        {(search || fromDate || toDate || paymentStatus !== "all" || group !== "all") && (
+        {(search || fromDate || toDate || paymentStatus !== "all" || group !== "all" || workType !== "all") && (
           <button type="button" className="billwise-clear" onClick={clearFilters}>
             Clear filters
           </button>

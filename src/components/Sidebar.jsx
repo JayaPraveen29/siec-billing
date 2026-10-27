@@ -12,6 +12,7 @@ import {
   Users,
   Landmark,
   ListTree,
+  Scale,
   ChevronDown,
 } from "lucide-react";
 import "./Sidebar.css";
@@ -24,6 +25,7 @@ const REPORT_PATHS = [
   "/reports/pending-payments",
   "/reports/pm-pending-payments",
   "/reports/material-advance",
+  "/reports/average-price",
   "/reports/date-wise",
 ];
 
@@ -41,7 +43,7 @@ export default function Sidebar() {
           <svg width="22" height="22" viewBox="0 0 32 32" className="sidebar-brand-icon">
             <path d="M4 8H28V12H18V20H28V24H4V20H14V12H4Z" fill="currentColor" />
           </svg>
-          <span className="sidebar-title">SIEC LEDGER</span>
+          <span className="sidebar-title">PO DATA</span>
         </div>
         <div className="sidebar-subtitle">PO &amp; Billing System</div>
       </div>
@@ -151,6 +153,15 @@ export default function Sidebar() {
             >
               <Landmark size={15} />
               Material Advance
+            </NavLink>
+            <NavLink
+              to="/reports/average-price"
+              className={({ isActive }) =>
+                `sidebar-link sidebar-sublink${isActive ? " active" : ""}`
+              }
+            >
+              <Scale size={15} />
+              Average Price Report
             </NavLink>
           </div>
         )}

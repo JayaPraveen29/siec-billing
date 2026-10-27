@@ -4,15 +4,15 @@ import { ArrowLeft, Plus, Trash2, ClipboardPaste } from "lucide-react";
 import { createPOSheet, addItemsBulk } from "../../services/poService";
 import { parseBulkItemsText } from "../PO/POSheet";
 import { fmtNum } from "../../utils/format";
+import { PO_GROUPS, WORK_TYPES } from "../../utils/groups";
 import TitleBlock from "../../components/TitleBlock";
 import "./POCreate.css";
 
-// Options for the "Group" dropdown. Edit this list to add/rename groups.
-const PO_GROUPS = ["SIEC", "ST"];
 
 const emptyForm = {
   poNumber: "",
   group: "",
+  workType: "",
   projectManager: "",
   unitRate: "",
   gstPercent: "18",
@@ -82,6 +82,10 @@ export default function POCreate() {
       setError("Please select a Group.");
       return;
     }
+    if (!form.workType) {
+      setError("Please select a Work Type.");
+      return;
+    }
     setError("");
     setSaving(true);
     try {
@@ -89,6 +93,7 @@ export default function POCreate() {
         code: form.poNumber.trim(),
         poNumber: form.poNumber.trim(),
         group: form.group,
+        workType: form.workType,
         projectManager: form.projectManager.trim(),
         unitRate: Number(form.unitRate) || 0,
         gstPercent: Number(form.gstPercent) || 0,
@@ -136,7 +141,7 @@ export default function POCreate() {
             <h2 className="section-title">PO Details</h2>
           </div>
 
-          <div className="form-row-2">
+          <div className="form-row-3">
             <label style={{ display: "block" }}>
               <span className="field-label">PO Number</span>
               <input
@@ -160,6 +165,23 @@ export default function POCreate() {
                 {PO_GROUPS.map((g) => (
                   <option key={g} value={g}>
                     {g}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: "block" }}>
+              <span className="field-label">Work Type</span>
+              <select
+                required
+                value={form.workType}
+                onChange={(e) => setForm({ ...form, workType: e.target.value })}
+                className="input"
+                style={{ marginTop: "0.25rem" }}
+              >
+                <option value="">Select work type</option>
+                {WORK_TYPES.map((w) => (
+                  <option key={w} value={w}>
+                    {w}
                   </option>
                 ))}
               </select>

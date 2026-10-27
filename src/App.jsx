@@ -10,6 +10,7 @@ import BillWiseReport from "./pages/BillWiseReport/BillWiseReport";
 import PendingPayments from "./pages/PendingPayments/PendingPayments";
 import PMPendingPayments from "./pages/PMPendingPayments/PMPendingPayments";
 import MaterialAdvanceReport from "./pages/MaterialAdvanceReport/MaterialAdvanceReport";
+import AveragePriceReport from "./pages/AveragePriceReport/AveragePriceReport";
 import DateWiseReport from "./pages/DateWiseReport/Datewisereport";
 import "./App.css";
 
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/reports/pending-payments" element={<PendingPayments />} />
           <Route path="/reports/pm-pending-payments" element={<PMPendingPayments />} />
           <Route path="/reports/material-advance" element={<MaterialAdvanceReport />} />
+          <Route path="/reports/average-price" element={<AveragePriceReport />} />
           <Route path="/reports/date-wise" element={<DateWiseReport />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

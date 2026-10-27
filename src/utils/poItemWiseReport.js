@@ -79,6 +79,7 @@ export function computePOItemWiseReport(poSheets) {
       poCode: po.code,
       poNumber: po.poNumber,
       group: po.group,
+      workType: po.workType,
       unitRate: num(po.unitRate),
       invoiceCols,
       rows,

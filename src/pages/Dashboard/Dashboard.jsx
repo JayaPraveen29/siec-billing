@@ -12,17 +12,20 @@ import { fmtINR, fmtNum , fmtToday } from "../../utils/format";
 import StatCard from "../../components/StatCard";
 import Loading from "../../components/Loading";
 import ConfirmDialog from "../../components/ConfirmDialog";
+import { PO_GROUPS, WORK_TYPES, WORK_NOT_SET, matchesGroup, matchesWorkType } from "../../utils/groups";
+import { companyName } from "../../utils/format";
 import TitleBlock from "../../components/TitleBlock";
 import "./Dashboard.css";
 
-// Options for the "Group" dropdown. Edit this list to add/rename groups.
-const PO_GROUPS = ["SIEC", "ST"];
-
+// Filter tabs: Group (SIEC / ST) and Work Type (STRL / CT).
 const GROUP_FILTERS = ["All", ...PO_GROUPS];
+const WORK_TYPE_FILTERS = ["All", ...WORK_TYPES, WORK_NOT_SET];
+const workTypeLabel = (w) => (w === "All" ? "All Work Types" : w === WORK_NOT_SET ? "Not Set" : w);
 
 const emptyForm = {
   poNumber: "",
   group: "",
+  workType: "",
   unitRate: "",
   gstPercent: "18",
   tdsPercent: "0.1",
@@ -34,6 +37,7 @@ export default function Dashboard() {
   const [poSheets, setPoSheets] = useState(null);
   const [allData, setAllData] = useState(null);
   const [groupFilter, setGroupFilter] = useState("All");
+  const [workTypeFilter, setWorkTypeFilter] = useState("All");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -56,14 +60,16 @@ export default function Dashboard() {
     };
   }, [poSheets, refreshKey]);
 
-  // Summary cards follow the selected group filter (All / SIEC / ST).
+  // Summary cards follow the selected group filter (All / group / unit).
   // "Balance to Receive" = the sum, across the visible POs, of each PO sheet's
   // own "Bal to be received" Total (unpaid bills only — see computePOLedger).
   const summary = useMemo(() => {
     if (!allData) return null;
     return allData
       .filter(
-        ({ po }) => groupFilter === "All" || (po.group || "") === groupFilter
+        ({ po }) =>
+          matchesGroup(po.group || "", groupFilter) &&
+          matchesWorkType(po.workType || "", workTypeFilter)
       )
       .reduce(
         (acc, { po, items, invoices }) => {
@@ -76,7 +82,7 @@ export default function Dashboard() {
         },
         { netReceivable: 0, received: 0, balance: 0, weightPending: 0 }
       );
-  }, [allData, groupFilter]);
+  }, [allData, groupFilter, workTypeFilter]);
 
   // Per-PO "Bal to be received" total (same figure as on the PO sheet).
   const poBalances = useMemo(() => {
@@ -89,20 +95,38 @@ export default function Dashboard() {
 
   const groupCounts = useMemo(() => {
     const counts = { All: poSheets ? poSheets.length : 0 };
-    PO_GROUPS.forEach((g) => {
-      counts[g] = poSheets ? poSheets.filter((po) => po.group === g).length : 0;
+    GROUP_FILTERS.forEach((g) => {
+      counts[g] = poSheets
+        ? poSheets.filter(
+            (po) => matchesGroup(po.group, g) && matchesWorkType(po.workType, workTypeFilter)
+          ).length
+        : 0;
     });
     return counts;
-  }, [poSheets]);
+  }, [poSheets, workTypeFilter]);
+
+  const workTypeCounts = useMemo(() => {
+    const counts = {};
+    WORK_TYPE_FILTERS.forEach((w) => {
+      counts[w] = poSheets
+        ? poSheets.filter(
+            (po) => matchesWorkType(po.workType, w) && matchesGroup(po.group, groupFilter)
+          ).length
+        : 0;
+    });
+    return counts;
+  }, [poSheets, groupFilter]);
 
   const visiblePOs = useMemo(
     () =>
       poSheets
         ? poSheets.filter(
-            (po) => groupFilter === "All" || po.group === groupFilter
+            (po) =>
+              matchesGroup(po.group, groupFilter) &&
+              matchesWorkType(po.workType, workTypeFilter)
           )
         : null,
-    [poSheets, groupFilter]
+    [poSheets, groupFilter, workTypeFilter]
   );
 
   async function handleCreate(e) {
@@ -113,6 +137,7 @@ export default function Dashboard() {
         code: form.poNumber.trim(),
         poNumber: form.poNumber.trim(),
         group: form.group,
+        workType: form.workType,
         unitRate: Number(form.unitRate) || 0,
         gstPercent: Number(form.gstPercent) || 0,
         tdsPercent: Number(form.tdsPercent) || 0,
@@ -137,6 +162,7 @@ export default function Dashboard() {
   return (
     <div className="page">
       <TitleBlock
+        company={companyName(groupFilter)}
         docType="Purchase Order Register"
         fields={[
           { label: "PO Sheets", value: visiblePOs ? visiblePOs.length : "—" },
@@ -189,6 +215,22 @@ export default function Dashboard() {
         ))}
       </div>
 
+      <div className="group-filter" role="tablist" aria-label="Filter by work type">
+        {WORK_TYPE_FILTERS.map((w) => (
+          <button
+            key={w}
+            type="button"
+            role="tab"
+            aria-selected={workTypeFilter === w}
+            onClick={() => setWorkTypeFilter(w)}
+            className={`group-filter-btn${workTypeFilter === w ? " active" : ""}`}
+          >
+            {workTypeLabel(w)}
+            <span className="group-filter-count">{workTypeCounts[w]}</span>
+          </button>
+        ))}
+      </div>
+
       {poSheets === null && <Loading label="Loading PO sheets" />}
 
       {poSheets && poSheets.length === 0 && (
@@ -198,7 +240,7 @@ export default function Dashboard() {
       )}
 
       {poSheets && poSheets.length > 0 && visiblePOs.length === 0 && (
-        <div className="empty-state">No {groupFilter} PO sheets found.</div>
+        <div className="empty-state">No {[groupFilter, workTypeFilter === "All" ? "All" : workTypeLabel(workTypeFilter)].filter((v) => v !== "All").join(" ")} PO sheets found.</div>
       )}
 
       <div className="po-grid">
@@ -214,7 +256,10 @@ export default function Dashboard() {
             <Link to={`/po/${po.id}`} className="po-card-link">
               <div className="po-card-top">
                 <div className="po-card-po-number">{po.poNumber}</div>
-                {po.group && <span className="po-card-group">{po.group}</span>}
+                <span style={{ display: "inline-flex", gap: "0.35rem" }}>
+                  {po.group && <span className="po-card-group">{po.group}</span>}
+                  {po.workType && <span className="po-card-group">{po.workType}</span>}
+                </span>
               </div>
               <div className="po-card-code">
                 {po.code}
@@ -280,6 +325,22 @@ export default function Dashboard() {
                 {PO_GROUPS.map((g) => (
                   <option key={g} value={g}>
                     {g}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Work Type">
+              <select
+                required
+                value={form.workType}
+                onChange={(e) => setForm({ ...form, workType: e.target.value })}
+                className="input"
+              >
+                <option value="">Select work type</option>
+                {WORK_TYPES.map((w) => (
+                  <option key={w} value={w}>
+                    {w}
                   </option>
                 ))}
               </select>

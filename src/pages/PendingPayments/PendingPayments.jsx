@@ -10,12 +10,13 @@ import {
   AGE_BUCKETS,
 } from "../../utils/pendingPaymentsReport";
 import { fmtNum, fmtINR, fmtDate, fmtToday, drawPdfCompany } from "../../utils/format";
+import GroupSelect, { WorkTypeSelect } from "../../components/GroupSelect";
+import { matchesGroup, matchesWorkType, PO_GROUPS } from "../../utils/groups";
+import { companyName } from "../../utils/format";
 import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import "./PendingPayments.css";
 
-// Options for the "Group" dropdown. Keep in sync with the PO create page.
-const PO_GROUPS = ["SIEC", "ST"];
 
 const PAYMENT_FILTERS = [
   { value: "all", label: "All Pending" },
@@ -262,6 +263,7 @@ export default function PendingPayments() {
 
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState("all");
+  const [workType, setWorkType] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("all");
@@ -281,9 +283,9 @@ export default function PendingPayments() {
   const report = useMemo(() => {
     if (!allData) return null;
     return computePendingPaymentsReport(
-      allData.filter((d) => group === "all" || d.po.group === group)
+      allData.filter((d) => matchesGroup(d.po.group, group) && matchesWorkType(d.po.workType, workType))
     );
-  }, [allData, group]);
+  }, [allData, group, workType]);
 
   const visibleBills = useMemo(() => {
     if (!report) return [];
@@ -336,6 +338,7 @@ export default function PendingPayments() {
     setPaymentStatus("all");
     setAgeBucket("all");
     setGroup("all");
+    setWorkType("all");
   }
 
   const hasFilters =
@@ -344,12 +347,13 @@ export default function PendingPayments() {
     toDate ||
     paymentStatus !== "all" ||
     ageBucket !== "all" ||
-    group !== "all";
+    group !== "all" || workType !== "all";
 
   return (
     <div className="pending-page">
       <div className="pending-header">
         <TitleBlock
+          company={companyName(group)}
           docType="PENDING PAYMENTS"
           fields={[
             { label: "POs", value: report ? new Set(report.rows.map((r) => r.poId)).size : "—" },
@@ -410,14 +414,8 @@ export default function PendingPayments() {
             />
           </label>
         </div>
-        <select value={group} onChange={(e) => setGroup(e.target.value)}>
-          <option value="all">Group</option>
-          {PO_GROUPS.map((g) => (
-            <option key={g} value={g}>
-              {g}
-            </option>
-          ))}
-        </select>
+        <GroupSelect value={group} onChange={setGroup} />
+<WorkTypeSelect value={workType} onChange={setWorkType} />
         <select value={ageBucket} onChange={(e) => setAgeBucket(e.target.value)}>
           {AGE_BUCKETS.map((b) => (
             <option key={b.value} value={b.value}>

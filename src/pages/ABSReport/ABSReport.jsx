@@ -4,16 +4,18 @@ import { fetchAllPOData } from "../../services/poService";
 import { computeABSReport } from "../../utils/ledger";
 import { fmtINR, fmtNum, fmtDate , fmtToday } from "../../utils/format";
 import { exportABSReportToExcel, exportABSReportToPDF } from "../../utils/absExport";
+import GroupSelect, { WorkTypeSelect } from "../../components/GroupSelect";
+import { matchesGroup, matchesWorkType } from "../../utils/groups";
+import { companyName } from "../../utils/format";
 import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import "./ABSReport.css";
 
-// Options for the "Group" dropdown. Keep in sync with the PO create page.
-const PO_GROUPS = ["SIEC", "ST"];
 
 export default function ABSReport() {
   const [allData, setAllData] = useState(null);
   const [group, setGroup] = useState("all");
+  const [workType, setWorkType] = useState("all");
   const [loading, setLoading] = useState(true);
   const [exportingPdf, setExportingPdf] = useState(false);
 
@@ -27,9 +29,9 @@ export default function ABSReport() {
   const report = useMemo(() => {
     if (!allData) return null;
     return computeABSReport(
-      allData.filter((d) => group === "all" || d.po.group === group)
+      allData.filter((d) => matchesGroup(d.po.group, group) && matchesWorkType(d.po.workType, workType))
     );
-  }, [allData, group]);
+  }, [allData, group, workType]);
 
   useEffect(() => {
     load();
@@ -54,6 +56,7 @@ export default function ABSReport() {
     <div className="abs-page">
       <div className="abs-header">
         <TitleBlock
+          company={companyName(group)}
           docType="Abstract of Structural Bills"
           fields={[
             { label: "PO Groups", value: report ? report.groups.length : "—" },
@@ -87,14 +90,8 @@ export default function ABSReport() {
       </div>
 
       <div className="abs-controls">
-        <select value={group} onChange={(e) => setGroup(e.target.value)}>
-          <option value="all">Group</option>
-          {PO_GROUPS.map((g) => (
-            <option key={g} value={g}>
-              {g}
-            </option>
-          ))}
-        </select>
+        <GroupSelect value={group} onChange={setGroup} />
+<WorkTypeSelect value={workType} onChange={setWorkType} />
       </div>
 
       {loading && <Loading label="Compiling abstract" />}

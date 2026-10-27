@@ -10,6 +10,9 @@ import {
 import { computePOLedger, isMatAdvNA } from "../../utils/ledger";
 import { fmtNum, fmtINR, fmtToday, drawPdfCompany } from "../../utils/format";
 import * as XLSX from "xlsx";
+import GroupSelect, { WorkTypeSelect } from "../../components/GroupSelect";
+import { matchesGroup, matchesWorkType } from "../../utils/groups";
+import { companyName } from "../../utils/format";
 import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import "./MaterialAdvanceReport.css";
@@ -97,8 +100,6 @@ async function exportToPDF(totals, rows, advLabel, company) {
   doc.save(`Material-Advance-Report-${stamp()}.pdf`);
 }
 
-// Options for the "Group" dropdown. Keep in sync with the PO create page.
-const PO_GROUPS = ["SIEC", "ST"];
 
 const STATUS_FILTERS = [
   { value: "all", label: "All Advance Status" },
@@ -116,6 +117,7 @@ export default function MaterialAdvanceReport() {
 
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState("all");
+  const [workType, setWorkType] = useState("all");
   const [status, setStatus] = useState("all");
 
   async function load() {
@@ -131,7 +133,7 @@ export default function MaterialAdvanceReport() {
 
   const report = useMemo(() => {
     if (!allData) return null;
-    const filtered = allData.filter((d) => group === "all" || d.po.group === group);
+    const filtered = allData.filter((d) => matchesGroup(d.po.group, group) && matchesWorkType(d.po.workType, workType));
     const base = computeMaterialAdvanceReport(filtered);
 
     // "Material Advance @ x%" column = the PO-level figure shown under the
@@ -151,39 +153,58 @@ export default function MaterialAdvanceReport() {
     // Advance" deductions. (Previously this summed the running balances of
     // every invoice, which over-counted.)
     const adjustedById = {};
+    // PO progress, same rule as the ABS report:
+    //   0 = completed   (invoices raised for the full PO qty and all paid)
+    //   1 = in progress (some invoicing / payment activity, not complete)
+    //   2 = not started (no invoices raised yet)
+    const stageById = {};
     filtered.forEach(({ po, items, invoices }) => {
       const ledger = computePOLedger(po, items || [], invoices || []);
       adjustedById[po.id] = ledger.invoiceRows.reduce(
         (sum, inv) => sum + n(inv.matAdvance),
         0
       );
+      let stage = 1;
+      if (ledger.invoiceRows.length === 0) {
+        stage = 2;
+      } else if (
+        Math.abs(ledger.totals.balanceQty) < 0.001 &&
+        ledger.invoiceRows.every((r) => !r.isUnpaid)
+      ) {
+        stage = 0;
+      }
+      stageById[po.id] = stage;
     });
 
-    return {
-      ...base,
-      rows: base.rows.map((r) => {
-        const advance = poLevelById[r.poId] || 0;
-        const adjusted = adjustedById[r.poId] || 0;
-        const bala = advance - adjusted;
-        // Status follows the figures shown on this report.
-        const status =
-          advance <= 1 && adjusted <= 1
-            ? "no-advance"
-            : bala < -1
-            ? "over-recovered"
-            : bala <= 1
-            ? "fully-recovered"
-            : "balance-pending";
-        return {
-          ...r,
-          recovered: advance,
-          balanceAdvance: adjusted,
-          status,
-          matAdvNA: !!naById[r.poId],
-        };
-      }),
-    };
-  }, [allData, group]);
+    const rows = base.rows.map((r) => {
+      const advance = poLevelById[r.poId] || 0;
+      const adjusted = adjustedById[r.poId] || 0;
+      const bala = advance - adjusted;
+      // Status follows the figures shown on this report.
+      const status =
+        advance <= 1 && adjusted <= 1
+          ? "no-advance"
+          : bala < -1
+          ? "over-recovered"
+          : bala <= 1
+          ? "fully-recovered"
+          : "balance-pending";
+      return {
+        ...r,
+        recovered: advance,
+        balanceAdvance: adjusted,
+        status,
+        matAdvNA: !!naById[r.poId],
+        stage: stageById[r.poId] ?? 1,
+      };
+    });
+
+    // Completed POs first, then in-progress, then not started. Array.sort is
+    // stable, so POs keep their PO-code order inside each block.
+    rows.sort((a, b) => a.stage - b.stage);
+
+    return { ...base, rows };
+  }, [allData, group, workType]);
 
   const visibleRows = useMemo(() => {
     if (!report) return [];
@@ -214,6 +235,7 @@ export default function MaterialAdvanceReport() {
   function clearFilters() {
     setSearch("");
     setGroup("all");
+    setWorkType("all");
     setStatus("all");
   }
 
@@ -221,6 +243,7 @@ export default function MaterialAdvanceReport() {
     <div className="matadv-page">
       <div className="matadv-header">
         <TitleBlock
+          company={companyName(group)}
           docType="MATERIAL ADVANCE REPORT"
           fields={[
             { label: "POs", value: report ? report.rows.length : "—" },
@@ -263,14 +286,8 @@ export default function MaterialAdvanceReport() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <select value={group} onChange={(e) => setGroup(e.target.value)}>
-          <option value="all">Group</option>
-          {PO_GROUPS.map((g) => (
-            <option key={g} value={g}>
-              {g}
-            </option>
-          ))}
-        </select>
+        <GroupSelect value={group} onChange={setGroup} />
+<WorkTypeSelect value={workType} onChange={setWorkType} />
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
           {STATUS_FILTERS.map((f) => (
             <option key={f.value} value={f.value}>
@@ -278,7 +295,7 @@ export default function MaterialAdvanceReport() {
             </option>
           ))}
         </select>
-        {(search || group !== "all" || status !== "all") && (
+        {(search || group !== "all" || workType !== "all" || status !== "all") && (
           <button type="button" className="matadv-clear" onClick={clearFilters}>
             Clear filters
           </button>

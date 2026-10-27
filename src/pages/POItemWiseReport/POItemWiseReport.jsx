@@ -13,12 +13,14 @@ import {
   exportPOItemWiseToExcel,
   exportPOItemWiseToPDF,
 } from "../../utils/poItemWiseExport";
+import GroupSelect, { WorkTypeSelect } from "../../components/GroupSelect";
+import { matchesGroup, matchesWorkType } from "../../utils/groups";
+import { companyName } from "../../utils/format";
 import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import "../POWiseReport/POWiseReport.css"; // shared controls / badge styles
 import "./POItemWiseReport.css";
 
-const PO_GROUPS = ["SIEC", "ST"];
 
 const STATUS_FILTERS = [
   { value: "all", label: "All Item Status" },
@@ -37,6 +39,7 @@ export default function POItemWiseReport() {
 
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState("all");
+  const [workType, setWorkType] = useState("all");
   // ?po=<id> lets the PO Wise Report link straight to one PO.
   const [poId, setPoId] = useState(searchParams.get("po") || "all");
   const [itemKey, setItemKey] = useState("all");
@@ -60,8 +63,8 @@ export default function POItemWiseReport() {
 
   // POs available in the PO dropdown (respects the Group filter).
   const poOptions = useMemo(
-    () => allGroups.filter((g) => group === "all" || g.group === group),
-    [allGroups, group]
+    () => allGroups.filter((g) => matchesGroup(g.group, group) && matchesWorkType(g.workType, workType)),
+    [allGroups, group, workType]
   );
 
   // Items available in the Item dropdown (respects Group + PO).
@@ -78,6 +81,11 @@ export default function POItemWiseReport() {
 
   function onGroupChange(v) {
     setGroup(v);
+    setPoId("all");
+    setItemKey("all");
+  }
+  function onWorkTypeChange(v) {
+    setWorkType(v);
     setPoId("all");
     setItemKey("all");
   }
@@ -101,6 +109,7 @@ export default function POItemWiseReport() {
     <div className="poitem-page">
       <div className="powise-header">
         <TitleBlock
+          company={companyName(group)}
           docType="PO ITEM WISE REPORT"
           fields={[
             { label: "POs", value: loading ? "—" : report.groups.length },
@@ -139,14 +148,8 @@ export default function POItemWiseReport() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <select value={group} onChange={(e) => onGroupChange(e.target.value)}>
-          <option value="all">Group</option>
-          {PO_GROUPS.map((g) => (
-            <option key={g} value={g}>
-              {g}
-            </option>
-          ))}
-        </select>
+        <GroupSelect value={group} onChange={onGroupChange} />
+<WorkTypeSelect value={workType} onChange={onWorkTypeChange} />
         <select value={poId} onChange={(e) => onPoChange(e.target.value)}>
           <option value="all">All POs</option>
           {poOptions.map((g) => (

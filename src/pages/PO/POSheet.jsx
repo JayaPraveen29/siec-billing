@@ -17,6 +17,7 @@ import {
 import { computePOLedger, effectiveMatAdvPercent, isMatAdvNA, isNAValue } from "../../utils/ledger";
 import { fmtINR, fmtNum, fmtDate, toInputDate } from "../../utils/format";
 import { exportPOSheetToExcel, exportPOSheetToPDF } from "../../utils/poExport";
+import { PO_GROUPS, WORK_TYPES } from "../../utils/groups";
 import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import ConfirmDialog from "../../components/ConfirmDialog";
@@ -31,8 +32,6 @@ const emptyItem = { srNo: "", description: "", weightKg: "" };
 
 // --- DD-MM-YY <-> ISO (yyyy-mm-dd) helpers for manual date entry ---
 // (Still used by the Add/Edit Invoice date field, which stays free-text.)
-// Options for the "Group" dropdown. Edit this list to add/rename groups.
-const PO_GROUPS = ["SIEC", "ST"];
 
 function ddmmyyToIso(str) {
   const m = /^(\d{2})-(\d{2})-(\d{2})$/.exec((str || "").trim());
@@ -489,6 +488,7 @@ export default function POSheet() {
           fields={[
             { label: "PO No.", value: po.poNumber },
             { label: "Group", value: po.group || "—" },
+            { label: "Work Type", value: po.workType || "—" },
             { label: "Project Manager", value: po.projectManager || "—" },
             { label: "Sheet Code", value: po.code },
             { label: "Unit Rate", value: `₹${fmtNum(po.unitRate, 2)}/kg` },
@@ -1121,6 +1121,7 @@ function PoSettingsModal({ po, onCancel, onSave }) {
   const [form, setForm] = useState({
     poNumber: po.poNumber ?? "",
     group: po.group ?? "",
+    workType: po.workType ?? "",
     projectManager: po.projectManager ?? "",
     unitRate: po.unitRate ?? "",
     gstPercent: po.gstPercent ?? "",
@@ -1136,6 +1137,7 @@ function PoSettingsModal({ po, onCancel, onSave }) {
       await onSave({
         poNumber: form.poNumber.trim(),
         group: form.group,
+        workType: form.workType,
         projectManager: form.projectManager.trim(),
         unitRate: Number(form.unitRate) || 0,
         gstPercent: Number(form.gstPercent) || 0,
@@ -1181,6 +1183,23 @@ function PoSettingsModal({ po, onCancel, onSave }) {
             {PO_GROUPS.map((g) => (
               <option key={g} value={g}>
                 {g}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label style={{ display: "block", marginBottom: "0.75rem" }}>
+          <span className="field-label">Work Type</span>
+          <select
+            value={form.workType}
+            onChange={(e) => setForm({ ...form, workType: e.target.value })}
+            className="input"
+            style={{ marginTop: "0.25rem" }}
+          >
+            <option value="">Work Type</option>
+            {WORK_TYPES.map((w) => (
+              <option key={w} value={w}>
+                {w}
               </option>
             ))}
           </select>
