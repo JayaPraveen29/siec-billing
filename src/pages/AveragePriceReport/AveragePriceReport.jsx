@@ -19,11 +19,10 @@ import "./AveragePriceReport.css";
 // ---------------------------------------------------------------------------
 // Table layout shared by the screen and both exports.
 //   PO No. | Weight | Rate | Basic | SIEC (MT, Basic, Rate/MT)
-//   | ST (MT, Basic, Rate/MT) | Totals (Total MT, Total Basic, Avg Rate)
+//   | ST (MT, Basic, Rate/MT)
 // ---------------------------------------------------------------------------
 const LEAD = ["PO No.", "Weight (MT)", "Rate (Rs/MT)", "Basic"];
 const SUB = ["MT", "Basic", "Rate/MT"];
-const TOTALS = ["Total MT", "Total Basic", "Avg Rate"];
 
 function cells(r, units = PO_GROUPS) {
   const out = [r.section, fmtNum(r.weightMT), fmtNum(r.rate), fmtNum(r.basic)];
@@ -31,7 +30,6 @@ function cells(r, units = PO_GROUPS) {
     const b = r.buckets[g];
     out.push(fmtNum(b.mt), fmtNum(b.value), b.mt > 0 ? fmtNum(bucketRate(b)) : "-");
   });
-  out.push(fmtNum(r.totalMT), fmtNum(r.totalValue), r.totalMT > 0 ? fmtNum(r.avgRate) : "-");
   return out;
 }
 
@@ -42,8 +40,6 @@ function exportHeadRows() {
     top.push(g, "", "");
     sub.push(...SUB);
   });
-  top.push("Totals", "", "");
-  sub.push(...TOTALS);
   return [top, sub];
 }
 
@@ -83,9 +79,8 @@ async function exportToPDF(rows, total, company, fy) {
     [
       ...LEAD.map((h) => ({ content: h, rowSpan: 2, styles: { valign: "middle" } })),
       ...units.map((g) => ({ content: g, colSpan: 3, styles: { halign: "center" } })),
-      { content: "Totals", colSpan: 3, styles: { halign: "center" } },
     ],
-    [...units.flatMap(() => SUB), ...TOTALS],
+    [...units.flatMap(() => SUB)],
   ];
   autoTable(doc, {
     head,
@@ -107,7 +102,7 @@ async function exportToPDF(rows, total, company, fy) {
     footStyles: { fillColor: false, textColor: 20, fontStyle: "bold", lineWidth: 0.5 },
     alternateRowStyles: { fillColor: false },
     columnStyles: Object.fromEntries(
-      Array.from({ length: LEAD.length + units.length * 3 + 3 - 1 }, (_, i) => [
+      Array.from({ length: LEAD.length + units.length * 3 - 1 }, (_, i) => [
         i + 1,
         { halign: "right" },
       ])
@@ -257,13 +252,10 @@ export default function AveragePriceReport() {
                     {g}
                   </th>
                 ))}
-                <th colSpan={3} className="avgp-group">
-                  Totals
-                </th>
               </tr>
               <tr>
-                {[...PO_GROUPS, "Totals"].flatMap((g, gi) =>
-                  (g === "Totals" ? TOTALS : SUB).map((h, i) => (
+                {PO_GROUPS.flatMap((g) =>
+                  SUB.map((h, i) => (
                     <th key={`${g}-${h}`} className={`text-right${i === 0 ? " avgp-sep" : ""}`}>
                       {h}
                     </th>
@@ -290,13 +282,6 @@ export default function AveragePriceReport() {
                       </FragmentCells>
                     );
                   })}
-                  <td className="text-right tabular avgp-sep">{fmtNum(r.totalMT)}</td>
-                  <td className="text-right tabular" style={{ fontWeight: 600 }}>
-                    {fmtNum(r.totalValue)}
-                  </td>
-                  <td className="text-right tabular text-rivet2" style={{ fontWeight: 600 }}>
-                    {r.totalMT > 0 ? fmtNum(r.avgRate) : "-"}
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -318,11 +303,6 @@ export default function AveragePriceReport() {
                     </FragmentCells>
                   );
                 })}
-                <td className="text-right tabular avgp-sep">{fmtNum(total.totalMT)}</td>
-                <td className="text-right tabular">{fmtINR(total.totalValue)}</td>
-                <td className="text-right tabular text-rivet2">
-                  {total.totalMT > 0 ? fmtNum(total.avgRate) : "-"}
-                </td>
               </tr>
             </tfoot>
           </table>

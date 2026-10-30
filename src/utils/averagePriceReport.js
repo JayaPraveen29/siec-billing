@@ -40,6 +40,7 @@ export function computeAveragePriceReport(poSheets, { fy = "all" } = {}) {
     PO_GROUPS.forEach((g) => (buckets[g] = emptyBucket()));
     const row = {
       poId: po.id,
+      groupRank: PO_GROUPS.includes(po.group) ? PO_GROUPS.indexOf(po.group) : PO_GROUPS.length,
       section: String(po.poNumber || po.code || po.id).trim(),
       weightMT: 0,
       basic: 0,
@@ -61,8 +62,12 @@ export function computeAveragePriceReport(poSheets, { fy = "all" } = {}) {
 
   const rows = [...map.values()]
     .map((r) => finish(r))
-    .sort((a, b) =>
-      a.section.localeCompare(b.section, undefined, { numeric: true, sensitivity: "base" })
+    // SIEC POs first, then ST, then any PO without a group; PO number order
+    // inside each group.
+    .sort(
+      (a, b) =>
+        a.groupRank - b.groupRank ||
+        a.section.localeCompare(b.section, undefined, { numeric: true, sensitivity: "base" })
     );
 
   return { rows, grandTotal: sumAveragePriceRows(rows) };
@@ -71,6 +76,7 @@ export function computeAveragePriceReport(poSheets, { fy = "all" } = {}) {
 function finish(r) {
   const out = {
     poId: r.poId,
+    groupRank: r.groupRank,
     section: r.section,
     weightMT: r.weightMT,
     basic: r.basic,
