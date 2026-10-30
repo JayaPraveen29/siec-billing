@@ -153,6 +153,53 @@ export default function POSheet() {
     setEditingTdsId(null);
   }
 
+  // Draft values for the inline-editable Net Receivable cells - same
+  // double-click pattern as TDS. Blank = use the computed figure.
+  const [netRecDrafts, setNetRecDrafts] = useState({});
+  const [editingNetRecId, setEditingNetRecId] = useState(null);
+
+  // The box opens pre-filled with the value currently shown (manual or
+  // computed), so it never looks empty.
+  function startEditingNetRec(inv, currentValue) {
+    setNetRecDrafts((prev) => ({
+      ...prev,
+      [inv.id]: currentValue === undefined || currentValue === null ? "" : String(currentValue),
+    }));
+    setEditingNetRecId(inv.id);
+  }
+
+  function cancelEditingNetRec(invoiceId) {
+    setNetRecDrafts((prev) => {
+      const next = { ...prev };
+      delete next[invoiceId];
+      return next;
+    });
+    setEditingNetRecId(null);
+  }
+
+  async function handleNetRecChange(invoiceId, rawValue, autoValue) {
+    const value = rawValue.trim();
+    const inv = invoices.find((i) => i.id === invoiceId);
+    const hadOverride =
+      inv &&
+      inv.netReceivableOverride !== undefined &&
+      inv.netReceivableOverride !== "" &&
+      inv.netReceivableOverride !== null;
+    // Blank, or the same as the computed figure -> stay on / return to auto.
+    const backToAuto = value === "" || Number(value) === Number(autoValue);
+    if (!(backToAuto && !hadOverride)) {
+      await updateInvoice(id, invoiceId, {
+        netReceivableOverride: backToAuto ? "" : Number(value),
+      });
+    }
+    setNetRecDrafts((prev) => {
+      const next = { ...prev };
+      delete next[invoiceId];
+      return next;
+    });
+    setEditingNetRecId(null);
+  }
+
   // PO-level Material Advance (the figure in the Wt./Kg column) - manual,
   // double-click to edit. Stored as the PO's openingMatAdvance, which also
   // seeds the Bala. Mat. Advance running balance.
@@ -939,6 +986,70 @@ export default function POSheet() {
                               title="Double-click to edit"
                             >
                               {effectiveTds && effectiveTds !== 0 ? fmtNum(effectiveTds, 0) : "-"}
+                            </td>
+                          );
+                        }
+
+                        if (def.no === 8) {
+                          // Net Receivable row - double-click to override the
+                          // computed figure; leave blank to go back to auto.
+                          const r = invoiceRowById[inv.id];
+                          const net = r?.netReceivable;
+                          // What the figure would be with no manual override.
+                          const autoNet =
+                            (r?.totalInvoiceValue || 0) - (r?.matAdvance || 0) - (r?.tds || 0);
+
+                          if (editingNetRecId === inv.id) {
+                            const draft = netRecDrafts[inv.id];
+                            const value = draft !== undefined ? draft : "";
+                            return (
+                              <td key={inv.id} className="text-right tabular">
+                                <input
+                                  autoFocus
+                                  type="number"
+                                  step="0.01"
+                                  value={value}
+                                  onChange={(e) =>
+                                    setNetRecDrafts((prev) => ({
+                                      ...prev,
+                                      [inv.id]: e.target.value,
+                                    }))
+                                  }
+                                  onFocus={(e) => e.target.select()}
+                                  onBlur={(e) =>
+                                    handleNetRecChange(inv.id, e.target.value, autoNet)
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") e.target.blur();
+                                    if (e.key === "Escape") cancelEditingNetRec(inv.id);
+                                  }}
+                                  className="input po-unit-rate-input"
+                                  placeholder={String(Math.round(autoNet))}
+                                  title="Leave blank to use the computed Net Receivable"
+                                />
+                              </td>
+                            );
+                          }
+
+                          const isManual =
+                            inv.netReceivableOverride !== undefined &&
+                            inv.netReceivableOverride !== "" &&
+                            inv.netReceivableOverride !== null;
+                          return (
+                            <td
+                              key={inv.id}
+                              className={`text-right tabular po-unit-rate-display ${
+                                def.accentClass || ""
+                              }`}
+                              style={{ fontWeight: 600 }}
+                              onDoubleClick={() => startEditingNetRec(inv, net)}
+                              title={
+                                isManual
+                                  ? "Manually entered - double-click to edit (blank = auto)"
+                                  : "Double-click to edit"
+                              }
+                            >
+                              {net && net !== 0 ? fmtNum(net, 0) : "-"}
                             </td>
                           );
                         }

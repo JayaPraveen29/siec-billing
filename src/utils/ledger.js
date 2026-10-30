@@ -43,7 +43,7 @@ function num(v) {
  * Compute the full ledger for one PO sheet.
  * @param {object} po - PO sheet document (unitRate, gstPercent, tdsPercent, matAdvPercent, openingMatAdvance)
  * @param {Array} items - item rows [{id, srNo, description, weightKg}]
- * @param {Array} invoices - invoice rows [{id, invoiceNo, invoiceDate, allocations:{itemId:qty}, paymentReceived, paymentDate, matAdvanceOverride, tdsOverride, roundOffOverride}]
+ * @param {Array} invoices - invoice rows [{id, invoiceNo, invoiceDate, allocations:{itemId:qty}, paymentReceived, paymentDate, matAdvanceOverride, tdsOverride, netReceivableOverride, roundOffOverride}]
  */
 export function computePOLedger(po, items, invoices) {
   const unitRate = num(po.unitRate);
@@ -117,7 +117,14 @@ export function computePOLedger(po, items, invoices) {
         ? num(inv.tdsOverride)
         : roundUp(basic * (tdsPercent / 100));
 
-    const netReceivable = totalInvoiceValue - matAdvance - tds;
+    // Net Receivable is normally Total Invoice Value - Mat. Advance - TDS, but
+    // can be overridden by hand (double-click on the PO sheet). Blank = auto.
+    const netReceivable =
+      inv.netReceivableOverride !== undefined &&
+      inv.netReceivableOverride !== "" &&
+      inv.netReceivableOverride !== null
+        ? num(inv.netReceivableOverride)
+        : totalInvoiceValue - matAdvance - tds;
     const paymentReceived = num(inv.paymentReceived);
     const balanceToReceive = netReceivable - paymentReceived;
 

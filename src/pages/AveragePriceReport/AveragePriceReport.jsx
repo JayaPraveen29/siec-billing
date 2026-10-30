@@ -18,12 +18,12 @@ import "./AveragePriceReport.css";
 
 // ---------------------------------------------------------------------------
 // Table layout shared by the screen and both exports.
-//   PO No. | Weight | Rate | Basic | SIEC (MT, Inv. Value, Rate/MT)
-//   | ST (MT, Inv. Value, Rate/MT) | Totals (Total MT, Total Inv. Value, Avg Rate)
+//   PO No. | Weight | Rate | Basic | SIEC (MT, Basic, Rate/MT)
+//   | ST (MT, Basic, Rate/MT) | Totals (Total MT, Total Basic, Avg Rate)
 // ---------------------------------------------------------------------------
 const LEAD = ["PO No.", "Weight (MT)", "Rate (Rs/MT)", "Basic"];
-const SUB = ["MT", "Invoice Value", "Rate/MT"];
-const TOTALS = ["Total MT", "Total Inv. Value", "Avg Rate"];
+const SUB = ["MT", "Basic", "Rate/MT"];
+const TOTALS = ["Total MT", "Total Basic", "Avg Rate"];
 
 function cells(r, units = PO_GROUPS) {
   const out = [r.section, fmtNum(r.weightMT), fmtNum(r.rate), fmtNum(r.basic)];

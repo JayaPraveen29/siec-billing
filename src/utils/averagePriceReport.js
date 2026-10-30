@@ -4,8 +4,8 @@
 //   Weight / Rate / Basic  -> what was ORDERED (sum of weights, weighted-average
 //                             PO rate in Rs/MT, and weight x rate)
 //   SIEC / ST              -> what was BILLED under each company group:
-//                             MT billed, invoice value (basic, i.e. qty x the
-//                             invoice's unit rate, before GST) and Rate/MT
+//                             MT billed, Basic value (qty x the invoice's
+//                             unit rate, before GST - no GST/TDS/round-off) and Rate/MT
 //   Totals                 -> Total MT, Total Inv. Value, Avg Rate (= value / MT)
 
 import { computePOLedger } from "./ledger";
