@@ -1,14 +1,12 @@
 // Average Price Report engine.
 // One row per PO (all of the PO's items rolled together; `section` holds the
-// PO number):
-//   Weight / Rate / Basic  -> what was ORDERED (sum of weights, weighted-average
-//                             PO rate in Rs/MT, and weight x rate)
-//   SIEC / ST              -> what was BILLED under each company group:
-//                             MT billed, Basic value (qty x the invoice's
-//                             unit rate, before GST - no GST/TDS/round-off) and Rate/MT
-//   Totals                 -> Total MT, Total Inv. Value, Avg Rate (= value / MT)
+// PO number). Everything is based on what was ORDERED - no invoice values:
+//   Weight / Rate / Basic  -> sum of item weights, PO rate in Rs/MT, and
+//                             weight x rate (Basic = before GST)
+//   SIEC / ST              -> the same MT / Basic / Rate/MT, placed under the
+//                             company group the PO belongs to
+//   Totals                 -> Total MT, Total Basic, Avg Rate (= Basic / MT)
 
-import { computePOLedger } from "./ledger";
 import { PO_GROUPS } from "./groups";
 import { inFinancialYear } from "./financialYear";
 
@@ -22,9 +20,9 @@ const emptyBucket = () => ({ mt: 0, value: 0 });
 /**
  * @param {Array} poSheets - [{ po, items, invoices }]
  * @param {{ fy?: string|number }} [opts] - fy: "all" or an FY start year.
- *   With an FY selected only invoices dated inside it are counted (billed MT /
- *   value), and only POs billed in that FY appear (their ordered Weight /
- *   Rate / Basic is the full PO).
+ *   With an FY selected, only POs that have an invoice dated inside that
+ *   financial year are listed (the figures themselves are the PO's ordered
+ *   values, not invoice values).
  */
 export function computeAveragePriceReport(poSheets, { fy = "all" } = {}) {
   const map = new Map();
@@ -34,7 +32,6 @@ export function computeAveragePriceReport(poSheets, { fy = "all" } = {}) {
       inFinancialYear(inv.invoiceDate, fy)
     );
     if (fy !== "all" && fyInvoices.length === 0) return;
-    const ledger = computePOLedger(po, items || [], fyInvoices);
     const unitRate = num(po.unitRate);
     const bucketKey = PO_GROUPS.includes(po.group) ? po.group : "other";
 
@@ -49,18 +46,15 @@ export function computeAveragePriceReport(poSheets, { fy = "all" } = {}) {
       buckets,
     };
 
-    ledger.itemRows.forEach((item) => {
+    (items || []).forEach((item) => {
       const ordered = num(item.weightKg);
       row.weightMT += ordered / 1000;
       row.basic += ordered * unitRate; // ordered kg x PO rate (Rs/kg)
-
-      ledger.invoiceRows.forEach((inv) => {
-        const q = num((inv.allocations || {})[item.id]); // kg billed
-        if (!q) return;
-        row.buckets[bucketKey].mt += q / 1000;
-        row.buckets[bucketKey].value += q * inv.unitRate; // honours per-invoice rate
-      });
     });
+
+    // Ordered MT / Basic go under the PO's own group (SIEC or ST).
+    row.buckets[bucketKey].mt = row.weightMT;
+    row.buckets[bucketKey].value = row.basic;
 
     map.set(po.id, row);
   });
