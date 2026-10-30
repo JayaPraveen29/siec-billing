@@ -1,12 +1,12 @@
 // Single source of truth for the two PO classifications.
 //
 //  - Group      = the company the PO belongs to      (SIEC, ST)
-//  - Work Type  = the kind of work the PO is for     (STRL, CT)
+//  - Work Type  = the kind of work the PO is for     (STRL, CT, SCRAP)
 //
 // Every PO carries both: po.group and po.workType.
 
 export const PO_GROUPS = ["SIEC", "ST"];
-export const WORK_TYPES = ["STRL", "CT"];
+export const WORK_TYPES = ["STRL", "CT", "SCRAP"];
 export const WORK_NOT_SET = "none"; // filter value: PO has no work type assigned
 
 const isAll = (v) => !v || v === "all" || v === "All";

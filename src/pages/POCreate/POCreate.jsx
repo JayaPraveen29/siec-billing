@@ -9,6 +9,12 @@ import TitleBlock from "../../components/TitleBlock";
 import "./POCreate.css";
 
 
+// Accepts typed text such as "1,00,000", "₹ 5000" or "20%" and returns the number.
+function parseLooseNumber(v) {
+  const n = parseFloat(String(v ?? "").replace(/[^0-9.\-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
 const emptyForm = {
   poNumber: "",
   group: "",
@@ -21,7 +27,12 @@ const emptyForm = {
   openingMatAdvance: "",
 };
 
-const emptyItemForm = { srNo: "", description: "", weightKg: "" };
+const emptyItemForm = { srNo: "", description: "", weightKg: "", numbers: "", area: "" };
+
+// Coal Tube (CT) POs: description is fixed, "Numbers" is entered manually and
+// weight is calculated automatically (numbers x weight of one tube).
+const CT_DESCRIPTION = "Coal Tube";
+const CT_TUBE_WEIGHT_KG = 586;
 
 export default function POCreate() {
   const navigate = useNavigate();
@@ -36,6 +47,13 @@ export default function POCreate() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const isCT = form.workType === "CT";
+  const ctNumbers = Number(itemForm.numbers);
+  const ctWeight =
+    Number.isFinite(ctNumbers) && ctNumbers > 0
+      ? Math.round(ctNumbers * CT_TUBE_WEIGHT_KG * 100) / 100
+      : 0;
+
   const totalWeight = useMemo(
     () => items.reduce((s, it) => s + (Number(it.weightKg) || 0), 0),
     [items]
@@ -48,12 +66,41 @@ export default function POCreate() {
 
   function handleAddItem(e) {
     e.preventDefault();
-    const description = itemForm.description.trim();
-    const weightKg = Number(itemForm.weightKg);
-    if (!description || !Number.isFinite(weightKg) || weightKg <= 0) return;
     const srNo = itemForm.srNo === "" ? nextSrNo() : Number(itemForm.srNo) || 0;
-    setItems((prev) => [...prev, { srNo, description, weightKg }]);
+    if (isCT) {
+      if (ctWeight <= 0) return;
+      setItems((prev) => [
+        ...prev,
+        {
+          srNo,
+          description: CT_DESCRIPTION,
+          area: itemForm.area.trim(),
+          numbers: ctNumbers,
+          weightKg: ctWeight,
+        },
+      ]);
+    } else {
+      const description = itemForm.description.trim();
+      const weightKg = Number(itemForm.weightKg);
+      if (!description || !Number.isFinite(weightKg) || weightKg <= 0) return;
+      setItems((prev) => [...prev, { srNo, description, weightKg }]);
+    }
     setItemForm(emptyItemForm);
+  }
+
+  function handleWorkTypeChange(value) {
+    const switchingCT = (value === "CT") !== (form.workType === "CT");
+    if (switchingCT && items.length > 0) {
+      const ok = window.confirm(
+        "Changing to/from CT changes the item format. Items added so far will be cleared. Continue?"
+      );
+      if (!ok) return;
+      setItems([]);
+    }
+    setItemForm(emptyItemForm);
+    setShowBulkPaste(false);
+    setBulkText("");
+    setForm({ ...form, workType: value });
   }
 
   function handleRemoveItem(index) {
@@ -98,17 +145,20 @@ export default function POCreate() {
         unitRate: Number(form.unitRate) || 0,
         gstPercent: Number(form.gstPercent) || 0,
         tdsPercent: Number(form.tdsPercent) || 0,
-        matAdvPercent: Number(form.matAdvPercent) || 0,
-        openingMatAdvance: Number(form.openingMatAdvance) || 0,
+        matAdvPercent: parseLooseNumber(form.matAdvPercent),
+        openingMatAdvance: parseLooseNumber(form.openingMatAdvance),
       });
 
       if (items.length > 0) {
         await addItemsBulk(
           ref.id,
-          items.map(({ srNo, description, weightKg }) => ({
+          items.map(({ srNo, description, weightKg, numbers, area }) => ({
             srNo: Number(srNo) || 0,
             description,
             weightKg: Number(weightKg) || 0,
+            ...(numbers != null
+              ? { numbers: Number(numbers) || 0, area: String(area ?? "").trim() }
+              : {}),
           }))
         );
       }
@@ -174,7 +224,7 @@ export default function POCreate() {
               <select
                 required
                 value={form.workType}
-                onChange={(e) => setForm({ ...form, workType: e.target.value })}
+                onChange={(e) => handleWorkTypeChange(e.target.value)}
                 className="input"
                 style={{ marginTop: "0.25rem" }}
               >
@@ -215,7 +265,8 @@ export default function POCreate() {
             <label style={{ display: "block" }}>
               <span className="field-label">Opening Mat. Advance (₹)</span>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={form.openingMatAdvance}
                 onChange={(e) =>
                   setForm({ ...form, openingMatAdvance: e.target.value })
@@ -252,8 +303,9 @@ export default function POCreate() {
             <label style={{ display: "block" }}>
               <span className="field-label">Mat. Adv. %</span>
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
+                placeholder="e.g. 20 or 20%"
                 value={form.matAdvPercent}
                 onChange={(e) =>
                   setForm({ ...form, matAdvPercent: e.target.value })
@@ -269,16 +321,18 @@ export default function POCreate() {
         <section className="po-section" style={{ marginTop: "2rem" }}>
           <div className="section-header">
             <h2 className="section-title">Items</h2>
-            <button
-              type="button"
-              onClick={() => setShowBulkPaste((v) => !v)}
-              className="btn-outline"
-            >
-              <ClipboardPaste size={15} /> Paste Multiple
-            </button>
+            {!isCT && (
+              <button
+                type="button"
+                onClick={() => setShowBulkPaste((v) => !v)}
+                className="btn-outline"
+              >
+                <ClipboardPaste size={15} /> Paste Multiple
+              </button>
+            )}
           </div>
 
-          {showBulkPaste && (
+          {showBulkPaste && !isCT && (
             <div className="po-create-bulk-paste">
               <div className="field-label" style={{ marginBottom: "0.4rem" }}>
                 Paste rows as "No, Description, Weight" (tab, comma, or space separated)
@@ -308,51 +362,111 @@ export default function POCreate() {
           )}
 
           <div className="form-row-3 po-create-item-form">
-            <label style={{ display: "block" }}>
-              <span className="field-label">No.</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={itemForm.srNo}
-                onChange={(e) => setItemForm({ ...itemForm, srNo: e.target.value })}
-                className="input"
-                style={{ marginTop: "0.25rem" }}
-              />
-            </label>
-            <label style={{ display: "block" }}>
-              <span className="field-label">Description</span>
-              <input
-                value={itemForm.description}
-                onChange={(e) =>
-                  setItemForm({ ...itemForm, description: e.target.value })
-                }
-                className="input"
-                style={{ marginTop: "0.25rem" }}
-              />
-            </label>
-            <div className="po-create-item-form-weight">
-              <label style={{ display: "block", flex: 1 }}>
-                <span className="field-label">Weight (kg)</span>
+            {!isCT && (
+              <label style={{ display: "block" }}>
+                <span className="field-label">No.</span>
                 <input
-                  type="number"
-                  step="0.01"
-                  value={itemForm.weightKg}
-                  onChange={(e) =>
-                    setItemForm({ ...itemForm, weightKg: e.target.value })
-                  }
+                  type="text"
+                  inputMode="numeric"
+                  value={itemForm.srNo}
+                  onChange={(e) => setItemForm({ ...itemForm, srNo: e.target.value })}
                   className="input"
                   style={{ marginTop: "0.25rem" }}
                 />
               </label>
-              <button type="button" onClick={handleAddItem} className="btn-primary">
-                <Plus size={15} /> Add
-              </button>
-            </div>
+            )}
+            {isCT ? (
+              <>
+                <label style={{ display: "block" }}>
+                  <span className="field-label">Description</span>
+                  <input
+                    value={CT_DESCRIPTION}
+                    readOnly
+                    className="input"
+                    style={{ marginTop: "0.25rem" }}
+                  />
+                </label>
+                <label style={{ display: "block" }}>
+                  <span className="field-label">Area</span>
+                  <input
+                    type="text"
+                    value={itemForm.area}
+                    onChange={(e) => setItemForm({ ...itemForm, area: e.target.value })}
+                    className="input"
+                    style={{ marginTop: "0.25rem" }}
+                  />
+                </label>
+                <div className="po-create-item-form-weight">
+                  <label style={{ display: "block", flex: 1 }}>
+                    <span className="field-label">Numbers (Nos.)</span>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={itemForm.numbers}
+                      onChange={(e) =>
+                        setItemForm({ ...itemForm, numbers: e.target.value })
+                      }
+                      className="input"
+                      style={{ marginTop: "0.25rem" }}
+                    />
+                  </label>
+                  <label style={{ display: "block", flex: 1 }}>
+                    <span className="field-label">
+                      Weight (kg) @ {CT_TUBE_WEIGHT_KG}/tube
+                    </span>
+                    <input
+                      readOnly
+                      value={ctWeight ? fmtNum(ctWeight, 2) : ""}
+                      className="input"
+                      style={{ marginTop: "0.25rem" }}
+                    />
+                  </label>
+                  <button type="button" onClick={handleAddItem} className="btn-primary">
+                    <Plus size={15} /> Add
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <label style={{ display: "block" }}>
+                  <span className="field-label">Description</span>
+                  <input
+                    value={itemForm.description}
+                    onChange={(e) =>
+                      setItemForm({ ...itemForm, description: e.target.value })
+                    }
+                    className="input"
+                    style={{ marginTop: "0.25rem" }}
+                  />
+                </label>
+                <div className="po-create-item-form-weight">
+                  <label style={{ display: "block", flex: 1 }}>
+                    <span className="field-label">Weight (kg)</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={itemForm.weightKg}
+                      onChange={(e) =>
+                        setItemForm({ ...itemForm, weightKg: e.target.value })
+                      }
+                      className="input"
+                      style={{ marginTop: "0.25rem" }}
+                    />
+                  </label>
+                  <button type="button" onClick={handleAddItem} className="btn-primary">
+                    <Plus size={15} /> Add
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
           {items.length === 0 ? (
             <div className="empty-state" style={{ marginTop: "1rem" }}>
-              No items added yet. Add them above, or paste multiple rows at once.
+              {isCT
+                ? "No items added yet. Enter the number of tubes above."
+                : "No items added yet. Add them above, or paste multiple rows at once."}
             </div>
           ) : (
             <div className="item-list" style={{ marginTop: "1rem", maxHeight: "20rem" }}>
@@ -361,6 +475,11 @@ export default function POCreate() {
                   <div className="item-list-desc">
                     <span className="item-list-sr">{it.srNo}</span>
                     {it.description}
+                    {it.numbers != null && (
+                      <span className="bulk-preview-weight tabular">
+                        {" "}• Area {it.area} • {it.numbers} nos
+                      </span>
+                    )}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                     <span className="bulk-preview-weight tabular">

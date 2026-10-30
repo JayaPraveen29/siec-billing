@@ -17,9 +17,7 @@ import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import "./MaterialAdvanceReport.css";
 
-// ---------------------------------------------------------------------------
-// Exports (kept in this file so only one file needs to change)
-// ---------------------------------------------------------------------------
+
 const exportHeaders = (advLabel) => ["PO", advLabel, "Adjusted", "Bala. Mat. Adv."];
 
 // Bala. Mat. Adv. = Material Advance (1st value column) - Adjusted (2nd).
@@ -199,9 +197,12 @@ export default function MaterialAdvanceReport() {
       };
     });
 
-    // Completed POs first, then in-progress, then not started. Array.sort is
+    // POs with material advance "NA" always go at the end of the table. The
+    // rest: completed first, then in-progress, then not started. Array.sort is
     // stable, so POs keep their PO-code order inside each block.
-    rows.sort((a, b) => a.stage - b.stage);
+    rows.sort(
+      (a, b) => Number(a.matAdvNA) - Number(b.matAdvNA) || a.stage - b.stage
+    );
 
     return { ...base, rows };
   }, [allData, group, workType]);

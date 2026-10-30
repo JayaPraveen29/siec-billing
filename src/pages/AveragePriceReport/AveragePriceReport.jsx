@@ -18,10 +18,10 @@ import "./AveragePriceReport.css";
 
 // ---------------------------------------------------------------------------
 // Table layout shared by the screen and both exports.
-//   Section | Weight | Rate | Basic | SIEC (MT, Inv. Value, Rate/MT)
+//   PO No. | Weight | Rate | Basic | SIEC (MT, Inv. Value, Rate/MT)
 //   | ST (MT, Inv. Value, Rate/MT) | Totals (Total MT, Total Inv. Value, Avg Rate)
 // ---------------------------------------------------------------------------
-const LEAD = ["Section", "Weight (MT)", "Rate (Rs/MT)", "Basic"];
+const LEAD = ["PO No.", "Weight (MT)", "Rate (Rs/MT)", "Basic"];
 const SUB = ["MT", "Invoice Value", "Rate/MT"];
 const TOTALS = ["Total MT", "Total Inv. Value", "Avg Rate"];
 
@@ -77,7 +77,7 @@ async function exportToPDF(rows, total, company, fy) {
   doc.setFont(undefined, "normal");
   doc.text(`Average Price Report${fy !== "all" ? ` - FY ${fyLabel(Number(fy))}` : ""}`, 40, 40);
   doc.setFontSize(9);
-  doc.text(`Sections: ${rows.length}`, 40, 58);
+  doc.text(`POs: ${rows.length}`, 40, 58);
 
   const head = [
     [
@@ -184,7 +184,7 @@ export default function AveragePriceReport() {
           company={companyName(group)}
           docType={`AVERAGE PRICE REPORT${fy !== "all" ? ` · FY ${fyLabel(Number(fy))}` : ""}`}
           fields={[
-            { label: "Sections", value: report ? visibleRows.length : "—" },
+            { label: "POs", value: report ? visibleRows.length : "—" },
             { label: "Generated", value: fmtToday() },
           ]}
         />
@@ -219,7 +219,7 @@ export default function AveragePriceReport() {
           <Search size={15} className="text-muted" />
           <input
             type="text"
-            placeholder="Search section…"
+            placeholder="Search PO…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -248,7 +248,7 @@ export default function AveragePriceReport() {
           <table className="ledger-table avgp-table">
             <thead>
               <tr>
-                <th rowSpan={2}>Section</th>
+                <th rowSpan={2}>PO No.</th>
                 <th rowSpan={2} className="text-right">Weight (MT)</th>
                 <th rowSpan={2} className="text-right">Rate (₹/MT)</th>
                 <th rowSpan={2} className="text-right">Basic</th>
@@ -273,7 +273,7 @@ export default function AveragePriceReport() {
             </thead>
             <tbody>
               {visibleRows.map((r) => (
-                <tr key={r.section}>
+                <tr key={r.poId || r.section}>
                   <td className="text-rivet">{r.section}</td>
                   <td className="text-right tabular">{fmtNum(r.weightMT)}</td>
                   <td className="text-right tabular">{fmtNum(r.rate)}</td>
@@ -333,7 +333,7 @@ export default function AveragePriceReport() {
         <div className="empty-state" style={{ marginTop: "1.5rem" }}>
           {report.rows.length === 0
             ? "No PO items to report on yet."
-            : "No sections match your filters."}
+            : "No POs match your filters."}
         </div>
       )}
     </div>

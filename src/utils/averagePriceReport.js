@@ -1,6 +1,6 @@
 // Average Price Report engine.
-// One row per Section (item description, matched case/space-insensitively)
-// across every PO passed in:
+// One row per PO (all of the PO's items rolled together; `section` holds the
+// PO number):
 //   Weight / Rate / Basic  -> what was ORDERED (sum of weights, weighted-average
 //                             PO rate in Rs/MT, and weight x rate)
 //   SIEC / ST              -> what was BILLED under each company group:
@@ -15,10 +15,6 @@ import { inFinancialYear } from "./financialYear";
 function num(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
-}
-
-function normName(s) {
-  return String(s || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 const emptyBucket = () => ({ mt: 0, value: 0 });
@@ -42,20 +38,18 @@ export function computeAveragePriceReport(poSheets, { fy = "all" } = {}) {
     const unitRate = num(po.unitRate);
     const bucketKey = PO_GROUPS.includes(po.group) ? po.group : "other";
 
+    // One row per PO: every item of the PO is rolled into that PO's row.
+    const buckets = { other: emptyBucket() };
+    PO_GROUPS.forEach((g) => (buckets[g] = emptyBucket()));
+    const row = {
+      poId: po.id,
+      section: String(po.poNumber || po.code || po.id).trim(),
+      weightMT: 0,
+      basic: 0,
+      buckets,
+    };
+
     ledger.itemRows.forEach((item) => {
-      const key = normName(item.description);
-      if (!key) return;
-      if (!map.has(key)) {
-        const buckets = { other: emptyBucket() };
-        PO_GROUPS.forEach((g) => (buckets[g] = emptyBucket()));
-        map.set(key, {
-          section: String(item.description).trim(),
-          weightMT: 0,
-          basic: 0,
-          buckets,
-        });
-      }
-      const row = map.get(key);
       const ordered = num(item.weightKg);
       row.weightMT += ordered / 1000;
       row.basic += ordered * unitRate; // ordered kg x PO rate (Rs/kg)
@@ -67,6 +61,8 @@ export function computeAveragePriceReport(poSheets, { fy = "all" } = {}) {
         row.buckets[bucketKey].value += q * inv.unitRate; // honours per-invoice rate
       });
     });
+
+    map.set(po.id, row);
   });
 
   const rows = [...map.values()]
@@ -80,6 +76,7 @@ export function computeAveragePriceReport(poSheets, { fy = "all" } = {}) {
 
 function finish(r) {
   const out = {
+    poId: r.poId,
     section: r.section,
     weightMT: r.weightMT,
     basic: r.basic,
