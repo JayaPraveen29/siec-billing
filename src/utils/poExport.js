@@ -34,13 +34,15 @@ function num(v) {
 // screen (see SUMMARY_ROW_DEFS in POSheet.jsx). Kept in sync manually since
 // the page builds a couple of labels from the PO's live percentages.
 function summaryRowDefs(po) {
-  return [
+  const isCT = po.workType === "CT";
+  const defs = [
     { no: 1, label: "Unit Rate", getVal: (r) => (r ? r.unitRate : null), decimals: 2, unitRateRow: true },
     { no: 2, label: "Basic Value", getVal: (r) => r?.basic, decimals: 2 },
     { no: 3, label: "GST", getVal: (r) => r?.gst, decimals: 2 },
     { no: 4, label: "Round Off", getVal: (r) => r?.roundOff, decimals: 2 },
     { no: 5, label: "Total Invoice Value", getVal: (r) => r?.totalInvoiceValue, bold: true },
     { no: 6, label: "Material Advance", getVal: (r) => r?.matAdvance },
+    { no: 6.5, label: "GST TDS @2%", getVal: (r) => r?.gstTds, ctOnly: true },
     { no: 7, label: "TDS", getVal: (r) => r?.tds },
     { no: 8, label: "Net Receivable", getVal: (r) => r?.netReceivable, bold: true, accentColor: COLOR_RIVET2 },
     { no: 9, label: "Bala. Mat. Advance", getVal: (r) => r?.matAdvanceBalance, totalMode: "last" },
@@ -54,6 +56,8 @@ function summaryRowDefs(po) {
       totalMode: "unpaid", // Total = sum of unpaid bills only
     },
   ];
+  // Coal Tub: no Material Advance rows, plus the GST TDS row.
+  return defs.filter((d) => (isCT ? d.no !== 6 && d.no !== 9 : !d.ctOnly));
 }
 
 // Builds the plain matrix (array-of-arrays) shared by both exporters:
@@ -63,7 +67,7 @@ function buildMatrix(po, ledger) {
   const header = [
     "No.",
     "Description",
-    "Wt./Kg",
+    po.workType === "CT" ? "Nos." : "Wt./Kg",
     ...invoices.map((inv) => inv.invoiceNo || ""),
     "Bala/Total",
   ];
@@ -93,7 +97,7 @@ function buildMatrix(po, ledger) {
   ];
 
   const defs = summaryRowDefs(po);
-  const summaryRows = defs.map((def) => {
+  const summaryRows = defs.map((def, defIdx) => {
     let rowTotal = null;
     if (def.unitRateRow) {
       rowTotal = num(po.unitRate);
@@ -114,7 +118,7 @@ function buildMatrix(po, ledger) {
     return {
       def,
       cells: [
-        def.no,
+        defIdx + 1,
         def.label,
         def.isDate ? "" : def.no === 6 && isMatAdvNA(po) ? "NA" : rowTotal,
         ...invoices.map((inv) => {
@@ -141,7 +145,7 @@ export function exportPOSheetToExcel(po, ledger, filename = `${po.code || "PO"}-
 
   const rows = [
     [`PO Billing Ledger — ${po.code || ""} (${po.poNumber || ""})`],
-    [`Unit Rate: ₹${fmtNum(po.unitRate, 2)}/kg   GST: ${po.gstPercent}%   Generated: ${fmtToday()}`],
+    [`Unit Rate: ₹${fmtNum(po.unitRate, 2)}/${po.workType === "CT" ? "Nos." : "kg"}   GST: ${po.gstPercent}%   Generated: ${fmtToday()}`],
     [],
     header,
     ...itemRows,
@@ -203,7 +207,7 @@ export async function exportPOSheetToPDF(
 
   doc.setFontSize(9);
   doc.text(
-    `Unit Rate: Rs.${fmtNum(po.unitRate, 2)}/kg   GST: ${po.gstPercent}%   TDS: ${po.tdsPercent}%   Mat. Adv.: ${effectiveMatAdvPercent(po)}%`,
+    `Unit Rate: Rs.${fmtNum(po.unitRate, 2)}/${po.workType === "CT" ? "Nos." : "kg"}   GST: ${po.gstPercent}%   TDS: ${po.tdsPercent}%${po.workType === "CT" ? "" : `   Mat. Adv.: ${effectiveMatAdvPercent(po)}%`}`,
     40,
     58
   );
@@ -221,7 +225,7 @@ export async function exportPOSheetToPDF(
     [
       { content: "No.", rowSpan: 3 },
       { content: "Description", rowSpan: 3 },
-      { content: "Wt./Kg", rowSpan: 3, styles: { halign: "right" } },
+      { content: po.workType === "CT" ? "Nos." : "Wt./Kg", rowSpan: 3, styles: { halign: "right" } },
       ...(invoices.length > 0
         ? [{ content: "Invoice Numbers", colSpan: invoices.length, styles: { halign: "center" } }]
         : []),

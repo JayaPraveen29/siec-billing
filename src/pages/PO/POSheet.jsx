@@ -14,7 +14,7 @@ import {
   updateItem,
   updatePOSheet,
 } from "../../services/poService";
-import { computePOLedger, effectiveMatAdvPercent, isMatAdvNA, isNAValue } from "../../utils/ledger";
+import { computePOLedger, CT_GST_TDS_PERCENT, CT_TUB_WEIGHT_KG, effectiveMatAdvPercent, isMatAdvNA, isNAValue } from "../../utils/ledger";
 import { fmtINR, fmtNum, fmtDate, toInputDate } from "../../utils/format";
 import { exportPOSheetToExcel, exportPOSheetToPDF } from "../../utils/poExport";
 import { PO_GROUPS, WORK_TYPES } from "../../utils/groups";
@@ -390,36 +390,46 @@ export default function POSheet() {
   // PO-level "Wt./Kg" column of the summary rows at all times, so it stays
   // stable whether or not invoices exist. Mirrors the per-invoice maths in
   // ledger.js.
+  const isCT = po?.workType === "CT";
+  // Quantity formatter: Nos. for Coal Tub (whole numbers when possible), kg otherwise.
+  const qd = (v) => fmtNum(v, isCT && Number.isInteger(Number(v)) ? 0 : 2);
+
   const poProjection = useMemo(() => {
     if (!po || !ledger) return null;
     const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
     const qty = ledger.totals.weightKg;
     const unitRate = n(po.unitRate);
+    // Coal Tub POs: qty is in Nos., so Basic Value = NUMBERS x UNIT RATE.
+    const totalNumbers = isCT ? qty : 0;
     const basic = qty * unitRate;
     const gst = basic * (n(po.gstPercent) / 100);
     const totalInvoiceValue = Math.round(basic + gst);
     const roundOff = totalInvoiceValue - basic - gst;
     // Manual entry (Opening Mat. Advance) - not calculated from the %.
     // "NA" POs take no material advance.
-    const matAdvance = isMatAdvNA(po) ? 0 : n(po.openingMatAdvance);
+    const matAdvance = isCT || isMatAdvNA(po) ? 0 : n(po.openingMatAdvance);
+    // Coal Tub only: GST TDS @ 2% of Basic, deducted from the invoice value.
+    const gstTds = isCT ? (basic * CT_GST_TDS_PERCENT) / 100 : 0;
     const tds = Math.ceil(basic * (n(po.tdsPercent) / 100) - Number.EPSILON);
     return {
       qty,
+      totalNumbers,
       unitRate,
       basic,
       gst,
       roundOff,
       totalInvoiceValue,
       matAdvance,
+      gstTds,
       tds,
-      netReceivable: totalInvoiceValue - matAdvance - tds,
+      netReceivable: totalInvoiceValue - matAdvance - gstTds - tds,
     };
-  }, [po, ledger]);
+  }, [po, ledger, items, isCT]);
 
   // The 11 Excel-style summary rows shown below the item matrix, one column per invoice.
   const SUMMARY_ROW_DEFS = useMemo(() => {
     if (!po) return [];
-    return [
+    const defs = [
       { no: 1, label: "Unit Rate", getVal: (r) => (r ? r.unitRate : null), decimals: 2 },
       { no: 2, label: "Basic Value", getVal: (r) => r?.basic, decimals: 2 },
       { no: 3, label: "GST", getVal: (r) => r?.gst, decimals: 2 },
@@ -430,6 +440,8 @@ export default function POSheet() {
       { no: 4, label: "Round Off", getVal: (r) => r?.roundOff, decimals: 2 },
       { no: 5, label: "Total Invoice Value", getVal: (r) => r?.totalInvoiceValue, bold: true },
       { no: 6, label: "Material Advance", getVal: (r) => r?.matAdvance },
+      // Coal Tub only (shown above TDS): GST TDS @ 2% of Basic Value.
+      { no: 6.5, label: `GST TDS @${CT_GST_TDS_PERCENT}%`, getVal: (r) => r?.gstTds, ctOnly: true },
       { no: 7, label: "TDS", getVal: (r) => r?.tds },
       {
         no: 8,
@@ -453,6 +465,10 @@ export default function POSheet() {
         totalMode: "unpaid", // Total = sum of unpaid bills only
       },
     ];
+    // Coal Tub: no Material Advance rows; GST TDS row is CT-only.
+    return defs.filter((d) =>
+      po.workType === "CT" ? d.no !== 6 && d.no !== 9 : !d.ctOnly
+    );
   }, [po]);
 
   if (po === null || items === null || invoices === null) {
@@ -538,7 +554,10 @@ export default function POSheet() {
             { label: "Work Type", value: po.workType || "—" },
             { label: "Project Manager", value: po.projectManager || "—" },
             { label: "Sheet Code", value: po.code },
-            { label: "Unit Rate", value: `₹${fmtNum(po.unitRate, 2)}/kg` },
+            { label: "Unit Rate", value: `₹${fmtNum(po.unitRate, 2)}/${isCT ? "Nos." : "kg"}` },
+            ...(isCT
+              ? [{ label: "Total Coal Tubs", value: `${fmtNum(poProjection?.totalNumbers ?? 0, 0)} Nos.` }]
+              : []),
             { label: "GST", value: `${po.gstPercent}%` },
           ]}
         />
@@ -564,7 +583,7 @@ export default function POSheet() {
           <button
             onClick={() => setSettingsModal(true)}
             className="btn-outline po-settings-btn"
-            title="Edit Unit Rate, GST, TDS, Material Advance"
+            title={isCT ? "Edit Unit Rate, GST, TDS" : "Edit Unit Rate, GST, TDS, Material Advance"}
           >
             <Settings size={15} /> Edit Rate & Settings
           </button>
@@ -573,10 +592,13 @@ export default function POSheet() {
       {po.title && <p className="po-title-desc">{po.title}</p>}
 
       <div className="po-stat-grid">
-        <StatCard label="Total Weight" value={`${fmtNum(ledger.totals.weightKg, 1)} kg`} />
         <StatCard
-          label="Balance Weight"
-          value={`${fmtNum(ledger.totals.balanceQty, 1)} kg`}
+          label={isCT ? "Total Coal Tubs" : "Total Weight"}
+          value={isCT ? `${qd(ledger.totals.weightKg)} Nos.` : `${fmtNum(ledger.totals.weightKg, 1)} kg`}
+        />
+        <StatCard
+          label={isCT ? "Balance Coal Tubs" : "Balance Weight"}
+          value={isCT ? `${qd(ledger.totals.balanceQty)} Nos.` : `${fmtNum(ledger.totals.balanceQty, 1)} kg`}
           accent={ledger.totals.balanceQty > 0 ? "warn" : "ok"}
         />
         <StatCard label="Net Receivable" value={fmtINR(ledger.totals.netReceivable)} />
@@ -619,7 +641,8 @@ export default function POSheet() {
               <tr>
                 <th rowSpan={4}>No.</th>
                 <th rowSpan={4}>Description</th>
-                <th rowSpan={4} className="text-right">Wt./Kg</th>
+                {isCT && <th rowSpan={4}>Area</th>}
+                <th rowSpan={4} className="text-right">{isCT ? "Nos." : "Wt./Kg"}</th>
                 {sortedInvoicesForMatrix.length > 0 && (
                   <th colSpan={sortedInvoicesForMatrix.length} className="text-center">
                     Invoice Numbers
@@ -669,18 +692,21 @@ export default function POSheet() {
               {ledger.itemRows.map((it) => (
                 <tr key={it.id}>
                   <td>{it.srNo}</td>
-                  <td>{it.description}</td>
-                  <td className="text-right tabular">{fmtNum(it.weightKg, 2)}</td>
+                  <td>
+                    {it.description}
+                  </td>
+                  {isCT && <td>{it.area || "-"}</td>}
+                  <td className="text-right tabular">{isCT ? qd(it.orderedQty) : fmtNum(it.weightKg, 2)}</td>
                   {sortedInvoicesForMatrix.map((inv) => {
                     const qty = Number(inv.allocations?.[it.id]) || 0;
                     return (
                       <td key={inv.id} className="text-right tabular">
-                        {qty > 0 ? fmtNum(qty, 2) : "-"}
+                        {qty > 0 ? qd(qty) : "-"}
                       </td>
                     );
                   })}
                   <td className={`text-right tabular ${it.balanceQty > 0.001 ? "text-warn" : "text-ok"}`}>
-                    {it.balanceQty > 0.001 ? fmtNum(it.balanceQty, 2) : "-"}
+                    {it.balanceQty > 0.001 ? qd(it.balanceQty) : "-"}
                   </td>
                   <td>
                     <div className="row-actions">
@@ -703,7 +729,7 @@ export default function POSheet() {
               {ledger.itemRows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={5 + sortedInvoicesForMatrix.length}
+                    colSpan={(isCT ? 6 : 5) + sortedInvoicesForMatrix.length}
                     className="text-center text-muted"
                     style={{ padding: "1.5rem 0" }}
                   >
@@ -715,8 +741,8 @@ export default function POSheet() {
             {ledger.itemRows.length > 0 && (
               <tfoot>
                 <tr>
-                  <td colSpan={2}>Total</td>
-                  <td className="text-right tabular">{fmtNum(ledger.totals.weightKg, 2)}</td>
+                  <td colSpan={isCT ? 3 : 2}>Total</td>
+                  <td className="text-right tabular">{qd(ledger.totals.weightKg)}</td>
                   {sortedInvoicesForMatrix.map((inv) => {
                     const colTotal = ledger.itemRows.reduce(
                       (sum, it) => sum + (Number(inv.allocations?.[it.id]) || 0),
@@ -724,11 +750,11 @@ export default function POSheet() {
                     );
                     return (
                       <td key={inv.id} className="text-right tabular">
-                        {colTotal > 0 ? fmtNum(colTotal, 2) : "-"}
+                        {colTotal > 0 ? qd(colTotal) : "-"}
                       </td>
                     );
                   })}
-                  <td className="text-right tabular">{fmtNum(ledger.totals.balanceQty, 2)}</td>
+                  <td className="text-right tabular">{qd(ledger.totals.balanceQty)}</td>
                   <td></td>
                 </tr>
               </tfoot>
@@ -742,23 +768,24 @@ export default function POSheet() {
               <tbody className="po-summary-rows">
                 <tr className="po-summary-row-bold">
                   <td></td>
-                  <td>Total Weight</td>
-                  <td className="text-right tabular">{fmtNum(ledger.totals.weightKg, 2)}</td>
+                  <td>{isCT ? "Total Numbers (Nos.)" : "Total Weight"}</td>
+                  {isCT && <td></td>}
+                  <td className="text-right tabular">{qd(ledger.totals.weightKg)}</td>
                   {sortedInvoicesForMatrix.map((inv) => {
                     const r = invoiceRowById[inv.id];
                     const qty = r?.qty;
                     return (
                       <td key={inv.id} className="text-right tabular" style={{ fontWeight: 600 }}>
-                        {qty > 0 ? fmtNum(qty, 2) : "-"}
+                        {qty > 0 ? qd(qty) : "-"}
                       </td>
                     );
                   })}
                   <td className="text-right tabular" style={{ fontWeight: 600 }}>
-                    {ledger.totals.balanceQty > 0.001 ? fmtNum(ledger.totals.balanceQty, 2) : "-"}
+                    {ledger.totals.balanceQty > 0.001 ? qd(ledger.totals.balanceQty) : "-"}
                   </td>
                   <td></td>
                 </tr>
-                {SUMMARY_ROW_DEFS.map((def) => {
+                {SUMMARY_ROW_DEFS.map((def, defIdx) => {
                   const noInvoices = sortedInvoicesForMatrix.length === 0;
 
                   // rowTotal     -> sum across the invoice columns (Bala/Total column)
@@ -792,8 +819,9 @@ export default function POSheet() {
 
                   return (
                     <tr key={def.no} className={def.bold ? "po-summary-row-bold" : undefined}>
-                      <td>{def.no}</td>
+                      <td>{defIdx + 1}</td>
                       <td>{def.label}</td>
+                      {isCT && <td></td>}
                       {def.no === 6 ? (
                         editingPoMatAdv ? (
                           <td className="text-right tabular">
@@ -997,7 +1025,7 @@ export default function POSheet() {
                           const net = r?.netReceivable;
                           // What the figure would be with no manual override.
                           const autoNet =
-                            (r?.totalInvoiceValue || 0) - (r?.matAdvance || 0) - (r?.tds || 0);
+                            (r?.totalInvoiceValue || 0) - (r?.matAdvance || 0) - (r?.gstTds || 0) - (r?.tds || 0);
 
                           if (editingNetRecId === inv.id) {
                             const draft = netRecDrafts[inv.id];
@@ -1176,6 +1204,7 @@ export default function POSheet() {
 
       {settingsModal && (
         <PoSettingsModal
+          isCT={isCT}
           po={po}
           onCancel={() => setSettingsModal(false)}
           onSave={handleSaveSettings}
@@ -1196,6 +1225,7 @@ export default function POSheet() {
 
       {itemModal && (
         <ItemModal
+          isCT={isCT}
           mode={itemModal.mode}
           data={itemModal.data}
           onCancel={() => setItemModal(null)}
@@ -1205,6 +1235,7 @@ export default function POSheet() {
 
       {invoiceModal && (
         <InvoiceModal
+          isCT={isCT}
           mode={invoiceModal.mode}
           data={invoiceModal.data}
           items={ledger.itemRows}
@@ -1228,7 +1259,7 @@ export default function POSheet() {
 // Opening Material Advance — the same values that live in cells C17, and the
 // "GST @ x%" / "TDS @ x%" / "Material Advance @ x%" row labels + M2 in the
 // source spreadsheet. These drive every downstream formula in ledger.js.
-function PoSettingsModal({ po, onCancel, onSave }) {
+function PoSettingsModal({ isCT, po, onCancel, onSave }) {
   const [form, setForm] = useState({
     poNumber: po.poNumber ?? "",
     group: po.group ?? "",
@@ -1255,9 +1286,9 @@ function PoSettingsModal({ po, onCancel, onSave }) {
         tdsPercent: Number(form.tdsPercent) || 0,
         // matAdvPercent is not sent, so the PO's stored % (the per-invoice
         // cap) is left untouched.
-        // "NA" = no material advance on this PO.
-        matAdvNA: isNAValue(form.openingMatAdvance),
-        openingMatAdvance: isNAValue(form.openingMatAdvance)
+        // "NA" = no material advance on this PO. Coal Tub POs never take one.
+        matAdvNA: isCT || isNAValue(form.openingMatAdvance),
+        openingMatAdvance: isCT || isNAValue(form.openingMatAdvance)
           ? 0
           : Number(form.openingMatAdvance) || 0,
       });
@@ -1327,7 +1358,7 @@ function PoSettingsModal({ po, onCancel, onSave }) {
         </label>
 
         <label style={{ display: "block" }}>
-          <span className="field-label">Unit Rate (₹/kg)</span>
+          <span className="field-label">{isCT ? "Unit Rate (₹/Nos.)" : "Unit Rate (₹/kg)"}</span>
           <input
             type="number"
             step="0.01"
@@ -1364,16 +1395,18 @@ function PoSettingsModal({ po, onCancel, onSave }) {
           </label>
         </div>
 
-        <label style={{ display: "block", marginTop: "0.75rem" }}>
-          <span className="field-label">Material Advance (₹) — type NA if none is taken</span>
-          <IndianNumberInput
-            allowNA
-            value={form.openingMatAdvance}
-            onChange={(v) => setForm({ ...form, openingMatAdvance: v })}
-            className="input"
-            style={{ marginTop: "0.25rem" }}
-          />
-        </label>
+        {!isCT && (
+          <label style={{ display: "block", marginTop: "0.75rem" }}>
+            <span className="field-label">Material Advance (₹) — type NA if none is taken</span>
+            <IndianNumberInput
+              allowNA
+              value={form.openingMatAdvance}
+              onChange={(v) => setForm({ ...form, openingMatAdvance: v })}
+              className="input"
+              style={{ marginTop: "0.25rem" }}
+            />
+          </label>
+        )}
 
         <div className="modal-actions">
           <button type="button" onClick={onCancel} className="btn-secondary">
@@ -1388,12 +1421,16 @@ function PoSettingsModal({ po, onCancel, onSave }) {
   );
 }
 
-function ItemModal({ mode, data, onCancel, onSave }) {
+function ItemModal({ isCT, mode, data, onCancel, onSave }) {
   const [form, setForm] = useState({
     srNo: data.srNo ?? "",
-    description: data.description ?? "",
+    description: isCT ? "Coal Tub" : data.description ?? "",
     weightKg: data.weightKg ?? "",
+    numbers: data.numbers ?? "",
+    area: data.area ?? "",
   });
+  // Coal Tub: weight is calculated from the numbers (586 kg per tub).
+  const ctWeight = Math.round((Number(form.numbers) || 0) * CT_TUB_WEIGHT_KG * 100) / 100;
 
   return (
     <div className="modal-overlay">
@@ -1403,7 +1440,10 @@ function ItemModal({ mode, data, onCancel, onSave }) {
           onSave({
             srNo: Number(form.srNo) || 0,
             description: form.description.trim(),
-            weightKg: Number(form.weightKg) || 0,
+            weightKg: isCT ? ctWeight : Number(form.weightKg) || 0,
+            ...(isCT
+              ? { numbers: Number(form.numbers) || 0, area: form.area.trim() }
+              : {}),
           });
         }}
         className="modal-panel"
@@ -1433,6 +1473,35 @@ function ItemModal({ mode, data, onCancel, onSave }) {
             style={{ marginTop: "0.25rem" }}
           />
         </label>
+        {isCT ? (
+          <>
+            <label style={{ display: "block" }}>
+              <span className="field-label">Numbers (Nos.)</span>
+              <input
+                required
+                type="number"
+                step="1"
+                value={form.numbers}
+                onChange={(e) => setForm({ ...form, numbers: e.target.value })}
+                className="input"
+                style={{ marginTop: "0.25rem" }}
+              />
+            </label>
+            <label style={{ display: "block" }}>
+              <span className="field-label">Area</span>
+              <input
+                value={form.area}
+                onChange={(e) => setForm({ ...form, area: e.target.value })}
+                className="input"
+                style={{ marginTop: "0.25rem" }}
+              />
+            </label>
+            <label style={{ display: "block" }}>
+              <span className="field-label">Weight (kg) @ {CT_TUB_WEIGHT_KG}/tub</span>
+              <input readOnly value={ctWeight ? ctWeight : ""} className="input" style={{ marginTop: "0.25rem" }} />
+            </label>
+          </>
+        ) : (
         <label style={{ display: "block" }}>
           <span className="field-label">Weight (kg)</span>
           <input
@@ -1445,6 +1514,7 @@ function ItemModal({ mode, data, onCancel, onSave }) {
             style={{ marginTop: "0.25rem" }}
           />
         </label>
+        )}
         <div className="modal-actions">
           <button type="button" onClick={onCancel} className="btn-secondary">
             Cancel
@@ -1581,7 +1651,7 @@ function BulkAddItemsModal({ existingCount, onCancel, onSave }) {
   );
 }
 
-function InvoiceModal({ mode, data, items, onCancel, onSave }) {
+function InvoiceModal({ isCT, mode, data, items, onCancel, onSave }) {
   const [invoiceNo, setInvoiceNo] = useState(data?.invoiceNo ?? "");
   const [invoiceDateText, setInvoiceDateText] = useState(
     isoToDdmmyy(toInputDate(data?.invoiceDate)) || ""
@@ -1671,6 +1741,7 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
           </label>
         </div>
 
+        {!isCT && (
         <label style={{ display: "block", marginBottom: "0.75rem" }}>
           <span className="field-label">Material Advance (₹) — leave blank for the standard % of Basic, enter an amount to override, or type NA</span>
           <IndianNumberInput
@@ -1682,10 +1753,11 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
             style={{ marginTop: "0.25rem" }}
           />
         </label>
+        )}
 
         <div>
           <div className="field-label" style={{ marginBottom: "0.5rem" }}>
-            Quantity Billed per Item (kg)
+            {isCT ? "Quantity Billed per Item (Nos.)" : "Quantity Billed per Item (kg)"}
           </div>
           <div className="item-list">
             {items.map((it) => (
@@ -1693,7 +1765,7 @@ function InvoiceModal({ mode, data, items, onCancel, onSave }) {
                 <div className="item-list-desc">
                   <span className="item-list-sr">{it.srNo}</span>
                   {it.description}
-                  <span className="item-list-bal">(bal. {fmtNum(it.balanceQty, 2)} kg)</span>
+                  <span className="item-list-bal">(bal. {isCT ? fmtNum(it.balanceQty, Number.isInteger(it.balanceQty) ? 0 : 2) : fmtNum(it.balanceQty, 2)} {isCT ? "Nos." : "kg"})</span>
                 </div>
                 <input
                   type="number"

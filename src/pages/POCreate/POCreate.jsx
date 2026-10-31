@@ -29,9 +29,9 @@ const emptyForm = {
 
 const emptyItemForm = { srNo: "", description: "", weightKg: "", numbers: "", area: "" };
 
-// Coal Tube (CT) POs: description is fixed, "Numbers" is entered manually and
+// Coal Tub (CT) POs: description is fixed, "Numbers" is entered manually and
 // weight is calculated automatically (numbers x weight of one tube).
-const CT_DESCRIPTION = "Coal Tube";
+const CT_DESCRIPTION = "Coal Tub";
 const CT_TUBE_WEIGHT_KG = 586;
 
 export default function POCreate() {
@@ -145,8 +145,9 @@ export default function POCreate() {
         unitRate: Number(form.unitRate) || 0,
         gstPercent: Number(form.gstPercent) || 0,
         tdsPercent: Number(form.tdsPercent) || 0,
-        matAdvPercent: parseLooseNumber(form.matAdvPercent),
-        openingMatAdvance: parseLooseNumber(form.openingMatAdvance),
+        // Coal Tub POs take no material advance.
+        matAdvPercent: isCT ? 0 : parseLooseNumber(form.matAdvPercent),
+        openingMatAdvance: isCT ? 0 : parseLooseNumber(form.openingMatAdvance),
       });
 
       if (items.length > 0) {
@@ -249,7 +250,7 @@ export default function POCreate() {
               />
             </label>
             <label style={{ display: "block" }}>
-              <span className="field-label">Unit Rate (₹/kg)</span>
+              <span className="field-label">{isCT ? "Unit Rate (₹/Nos.)" : "Unit Rate (₹/kg)"}</span>
               <input
                 type="number"
                 step="0.01"
@@ -261,6 +262,7 @@ export default function POCreate() {
             </label>
           </div>
 
+          {!isCT && (
           <div className="form-row-2" style={{ marginTop: "0.75rem" }}>
             <label style={{ display: "block" }}>
               <span className="field-label">Opening Mat. Advance (₹)</span>
@@ -276,8 +278,9 @@ export default function POCreate() {
               />
             </label>
           </div>
+          )}
 
-          <div className="form-row-3" style={{ marginTop: "0.75rem" }}>
+          <div className={isCT ? "form-row-2" : "form-row-3"} style={{ marginTop: "0.75rem" }}>
             <label style={{ display: "block" }}>
               <span className="field-label">GST %</span>
               <input
@@ -300,6 +303,7 @@ export default function POCreate() {
                 style={{ marginTop: "0.25rem" }}
               />
             </label>
+            {!isCT && (
             <label style={{ display: "block" }}>
               <span className="field-label">Mat. Adv. %</span>
               <input
@@ -314,6 +318,7 @@ export default function POCreate() {
                 style={{ marginTop: "0.25rem" }}
               />
             </label>
+            )}
           </div>
         </section>
 

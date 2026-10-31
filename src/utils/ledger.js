@@ -8,6 +8,20 @@
 // Some POs were saved without it, which made every Material Advance show "-".
 export const DEFAULT_MAT_ADV_PERCENT = 20;
 
+// Coal Tub (workType "CT") POs are priced per tub, not per kg:
+// Basic Value = NUMBERS x UNIT RATE. Item weight = numbers x 586 kg.
+export const CT_TUB_WEIGHT_KG = 586;
+// Coal Tub POs: GST TDS @ 2% of Basic Value, deducted from the invoice value.
+export const CT_GST_TDS_PERCENT = 2;
+
+/** Number of tubs on a Coal Tub item (falls back to weight / 586). */
+export function ctItemNumbers(item) {
+  const n = Number(item?.numbers);
+  if (Number.isFinite(n) && n > 0) return n;
+  const w = Number(item?.weightKg);
+  return Number.isFinite(w) && w > 0 ? w / CT_TUB_WEIGHT_KG : 0;
+}
+
 /** The Mat. Adv. % actually applied to a PO (stored value, else 20), kept within 0-100. */
 export function effectiveMatAdvPercent(po) {
   const stored = Number(po?.matAdvPercent);
@@ -53,7 +67,13 @@ export function computePOLedger(po, items, invoices) {
   // blow up the totals.
   const matAdvPercent = effectiveMatAdvPercent(po);
   const openingMatAdvance = num(po.openingMatAdvance);
-  const poNA = isMatAdvNA(po);
+  const isCT = po.workType === "CT";
+  // Coal Tub POs take no material advance at all.
+  const poNA = isCT || isMatAdvNA(po);
+  const itemById = {};
+  items.forEach((it) => {
+    itemById[it.id] = it;
+  });
 
   const sortedInvoices = [...invoices].sort((a, b) => {
     const da = a.invoiceDate ? new Date(a.invoiceDate).getTime() : Infinity;
@@ -73,6 +93,9 @@ export function computePOLedger(po, items, invoices) {
       inv.unitRateOverride !== undefined && inv.unitRateOverride !== ""
         ? num(inv.unitRateOverride)
         : unitRate;
+    // Coal Tub: allocations are entered in Nos. (tubs), so qty is already the
+    // number of tubs and Basic Value = NUMBERS x UNIT RATE.
+    const numbers = isCT ? qty : 0;
     const basic = qty * effectiveUnitRate;
     const gst = basic * (gstPercent / 100);
     const totalInvoiceValue = Math.round(basic + gst);
@@ -112,6 +135,9 @@ export function computePOLedger(po, items, invoices) {
       matAdvance = matAdvanceCap;
     }
 
+    // Coal Tub only: GST TDS @ 2% of Basic, subtracted from the invoice value.
+    const gstTds = isCT ? (basic * CT_GST_TDS_PERCENT) / 100 : 0;
+
     const tds =
       inv.tdsOverride !== undefined && inv.tdsOverride !== ""
         ? num(inv.tdsOverride)
@@ -124,7 +150,7 @@ export function computePOLedger(po, items, invoices) {
       inv.netReceivableOverride !== "" &&
       inv.netReceivableOverride !== null
         ? num(inv.netReceivableOverride)
-        : totalInvoiceValue - matAdvance - tds;
+        : totalInvoiceValue - matAdvance - gstTds - tds;
     const paymentReceived = num(inv.paymentReceived);
     const balanceToReceive = netReceivable - paymentReceived;
 
@@ -142,6 +168,7 @@ export function computePOLedger(po, items, invoices) {
     return {
       ...inv,
       qty,
+      numbers,
       unitRate: effectiveUnitRate,
       basic,
       gst,
@@ -150,6 +177,7 @@ export function computePOLedger(po, items, invoices) {
       matAdvance,
       matAdvanceCap,
       matAdvanceNA,
+      gstTds,
       tds,
       netReceivable,
       paymentReceived,
@@ -169,14 +197,21 @@ export function computePOLedger(po, items, invoices) {
       (s, inv) => s + num((inv.allocations || {})[item.id]),
       0
     );
+    // Quantity ordered: kg normally; Nos. (tubs) for Coal Tub POs.
+    const orderedQty = isCT ? ctItemNumbers(item) : num(item.weightKg);
     return {
       ...item,
+      orderedQty,
       allocated,
-      balanceQty: num(item.weightKg) - allocated,
+      balanceQty: orderedQty - allocated,
     };
   });
 
-  const totalWeightKg = items.reduce((s, i) => s + num(i.weightKg), 0);
+  // For Coal Tub POs this total is in Nos. (tubs), not kg.
+  const totalWeightKg = items.reduce(
+    (s, i) => s + (isCT ? ctItemNumbers(i) : num(i.weightKg)),
+    0
+  );
   const totalAllocated = invoiceRows.reduce((s, r) => s + r.qty, 0);
 
   const totals = {
@@ -188,6 +223,7 @@ export function computePOLedger(po, items, invoices) {
     roundOff: invoiceRows.reduce((s, r) => s + r.roundOff, 0),
     totalInvoiceValue: invoiceRows.reduce((s, r) => s + r.totalInvoiceValue, 0),
     matAdvance: invoiceRows.reduce((s, r) => s + r.matAdvance, 0),
+    gstTds: invoiceRows.reduce((s, r) => s + r.gstTds, 0),
     tds: invoiceRows.reduce((s, r) => s + r.tds, 0),
     netReceivable: invoiceRows.reduce((s, r) => s + r.netReceivable, 0),
     paymentReceived: invoiceRows.reduce((s, r) => s + r.paymentReceived, 0),
