@@ -21,6 +21,25 @@ function dayKey(d) {
 const MONEY_EPSILON = 1; // ₹ tolerance for "fully paid"
 
 /**
+ * Qty columns shown for the Work Type filter: STRL / CT / SCRAP all together
+ * on "All", or just the selected one.
+ */
+export function billWiseQtyColumns(workType) {
+  const all = [
+    { key: "qtyStrl", label: "STRL (kg)", type: "STRL" },
+    { key: "qtyCt", label: "CT (Nos.)", type: "CT" },
+    { key: "qtyScrap", label: "SCRAP (kg)", type: "SCRAP" },
+  ];
+  const one = all.filter((c) => c.type === workType);
+  return one.length ? one : all;
+}
+
+/** Area column applies to Coal Tub bills: shown for the CT and All filters. */
+export function billWiseShowArea(workType) {
+  return workType === "CT" || !workType || workType === "all" || workType === "All" || workType === "none";
+}
+
+/**
  * Build one row per bill (invoice) across every PO sheet.
  * @param {Array} poSheets - [{ po, items, invoices }]
  */
@@ -29,6 +48,7 @@ export function computeBillWiseReport(poSheets) {
 
   poSheets.forEach(({ po, items, invoices }) => {
     const ledger = computePOLedger(po, items, invoices);
+    const wt = po.workType === "CT" ? "CT" : po.workType === "SCRAP" ? "SCRAP" : "STRL";
     ledger.invoiceRows.forEach((inv) => {
       const paymentStatus =
         inv.balanceToReceive <= MONEY_EPSILON
@@ -37,13 +57,35 @@ export function computeBillWiseReport(poSheets) {
           ? "unpaid"
           : "partially-paid";
 
+      // Coal Tub only: the area(s) of the items billed on this bill.
+      const area =
+        po.workType === "CT"
+          ? [
+              ...new Set(
+                items
+                  .filter((it) => num((inv.allocations || {})[it.id]) > 0)
+                  .map((it) => String(it.area ?? "").trim())
+                  .filter(Boolean)
+              ),
+            ].join(", ")
+          : "";
+
       rows.push({
         poId: po.id,
+        isCT: po.workType === "CT",
+        area,
         poCode: po.code,
         poNumber: po.poNumber,
         billNo: inv.invoiceNo,
         billDate: inv.invoiceDate,
         qty: inv.qty,
+        // Qty split by work type, so it's clear what the quantity is in.
+        // CT is in Nos. (tubs); STRL / SCRAP are in kg. A PO with no work
+        // type set is counted under STRL.
+        qtyStrl: wt === "STRL" ? inv.qty : 0,
+        qtyCt: wt === "CT" ? inv.qty : 0,
+        qtyScrap: wt === "SCRAP" ? inv.qty : 0,
+        workTypeKey: wt,
         basic: inv.basic,
         gst: inv.gst,
         tds: inv.tds,
@@ -84,6 +126,9 @@ export function computeBillWiseReport(poSheets) {
   const grandTotal = rows.reduce(
     (acc, r) => {
       acc.qty += r.qty;
+      acc.qtyStrl += r.qtyStrl;
+      acc.qtyCt += r.qtyCt;
+      acc.qtyScrap += r.qtyScrap;
       acc.basic += r.basic;
       acc.gst += r.gst;
       acc.tds += r.tds;
@@ -97,6 +142,9 @@ export function computeBillWiseReport(poSheets) {
     },
     {
       qty: 0,
+      qtyStrl: 0,
+      qtyCt: 0,
+      qtyScrap: 0,
       basic: 0,
       gst: 0,
       tds: 0,

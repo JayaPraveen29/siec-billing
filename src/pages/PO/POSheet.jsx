@@ -81,6 +81,31 @@ export default function POSheet() {
   const [settingsModal, setSettingsModal] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
 
+  // Inline-editable Description cell in the items table. Double-click the
+  // description to edit it; Enter / click-away saves, Escape cancels.
+  const [editingDescId, setEditingDescId] = useState(null);
+  const [descDraft, setDescDraft] = useState("");
+
+  function startEditingDescription(it) {
+    setDescDraft(it.description ?? "");
+    setEditingDescId(it.id);
+  }
+
+  function cancelEditingDescription() {
+    setDescDraft("");
+    setEditingDescId(null);
+  }
+
+  async function saveDescription(it, rawValue) {
+    const value = rawValue.trim();
+    // Description is required; empty or unchanged => just leave edit mode.
+    if (value && value !== (it.description ?? "")) {
+      await updateItem(id, it.id, { description: value });
+    }
+    setDescDraft("");
+    setEditingDescId(null);
+  }
+
   // Draft values for the inline-editable Unit Rate cells (one per invoice
   // column) — some invoices don't follow the PO's default unit rate.
   const [unitRateDrafts, setUnitRateDrafts] = useState({});
@@ -151,6 +176,41 @@ export default function POSheet() {
       return next;
     });
     setEditingTdsId(null);
+  }
+
+  // Draft values for the inline-editable GST TDS @2% cells (Coal Tub POs) -
+  // same double-click pattern as TDS. Blank = use the computed 2% figure.
+  const [gstTdsDrafts, setGstTdsDrafts] = useState({});
+  const [editingGstTdsId, setEditingGstTdsId] = useState(null);
+
+  function startEditingGstTds(inv) {
+    setGstTdsDrafts((prev) => ({
+      ...prev,
+      [inv.id]: inv.gstTdsOverride ?? "",
+    }));
+    setEditingGstTdsId(inv.id);
+  }
+
+  function cancelEditingGstTds(invoiceId) {
+    setGstTdsDrafts((prev) => {
+      const next = { ...prev };
+      delete next[invoiceId];
+      return next;
+    });
+    setEditingGstTdsId(null);
+  }
+
+  async function handleGstTdsOverrideChange(invoiceId, rawValue) {
+    const value = rawValue.trim();
+    await updateInvoice(id, invoiceId, {
+      gstTdsOverride: value === "" ? "" : Number(value),
+    });
+    setGstTdsDrafts((prev) => {
+      const next = { ...prev };
+      delete next[invoiceId];
+      return next;
+    });
+    setEditingGstTdsId(null);
   }
 
   // Draft values for the inline-editable Net Receivable cells - same
@@ -464,6 +524,9 @@ export default function POSheet() {
         accentFn: (v) => (v > 0.5 ? "text-warn" : "text-ok"),
         totalMode: "unpaid", // Total = sum of unpaid bills only
       },
+      // Days between the bill (invoice) date and the payment date. Calculated
+      // automatically; shows "-" until a payment date is entered.
+      { no: 13, label: "Days Left", getVal: (r) => r?.daysLeft, noTotal: true },
     ];
     // Coal Tub: no Material Advance rows; GST TDS row is CT-only.
     return defs.filter((d) =>
@@ -692,9 +755,32 @@ export default function POSheet() {
               {ledger.itemRows.map((it) => (
                 <tr key={it.id}>
                   <td>{it.srNo}</td>
-                  <td>
-                    {it.description}
-                  </td>
+                  {editingDescId === it.id ? (
+                    <td>
+                      <input
+                        autoFocus
+                        type="text"
+                        value={descDraft}
+                        onChange={(e) => setDescDraft(e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                        onBlur={(e) => saveDescription(it, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") e.target.blur();
+                          if (e.key === "Escape") cancelEditingDescription();
+                        }}
+                        className="input po-unit-rate-input"
+                        style={{ width: "100%", minWidth: "12rem", textAlign: "left" }}
+                      />
+                    </td>
+                  ) : (
+                    <td
+                      className="po-unit-rate-display"
+                      onDoubleClick={() => startEditingDescription(it)}
+                      title="Double-click to edit"
+                    >
+                      {it.description}
+                    </td>
+                  )}
                   {isCT && <td>{it.area || "-"}</td>}
                   <td className="text-right tabular">{isCT ? qd(it.orderedQty) : fmtNum(it.weightKg, 2)}</td>
                   {sortedInvoicesForMatrix.map((inv) => {
@@ -793,7 +879,7 @@ export default function POSheet() {
                   let rowTotal = null;
                   let poLevelTotal = null;
 
-                  if (def.no !== 1 && !def.isDate) {
+                  if (def.no !== 1 && !def.isDate && !def.noTotal) {
                     poLevelTotal =
                       def.no <= 8 ? Number(def.getVal(poProjection)) || 0 : 0;
 
@@ -866,7 +952,7 @@ export default function POSheet() {
                       >
                         {def.no === 1
                           ? fmtNum(po.unitRate, 2)
-                          : def.isDate
+                          : def.isDate || def.noTotal
                           ? "-"
                           : poLevelTotal
                           ? fmtNum(poLevelTotal, def.decimals ?? 0)
@@ -966,6 +1052,54 @@ export default function POSheet() {
                                 : effectiveMatAdv && effectiveMatAdv !== 0
                                 ? fmtNum(effectiveMatAdv, 0)
                                 : "-"}
+                            </td>
+                          );
+                        }
+
+                        if (def.no === 6.5) {
+                          // GST TDS @2% row (Coal Tub) - double-click to override.
+                          const r = invoiceRowById[inv.id];
+                          const effectiveGstTds = r?.gstTds;
+
+                          if (editingGstTdsId === inv.id) {
+                            const draft = gstTdsDrafts[inv.id];
+                            const value = draft !== undefined ? draft : "";
+                            return (
+                              <td key={inv.id} className="text-right tabular">
+                                <input
+                                  autoFocus
+                                  type="number"
+                                  step="0.01"
+                                  value={value}
+                                  onChange={(e) =>
+                                    setGstTdsDrafts((prev) => ({
+                                      ...prev,
+                                      [inv.id]: e.target.value,
+                                    }))
+                                  }
+                                  onFocus={(e) => e.target.select()}
+                                  onBlur={(e) =>
+                                    handleGstTdsOverrideChange(inv.id, e.target.value)
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") e.target.blur();
+                                    if (e.key === "Escape") cancelEditingGstTds(inv.id);
+                                  }}
+                                  className="input po-unit-rate-input"
+                                  title="Leave blank to use the computed GST TDS"
+                                />
+                              </td>
+                            );
+                          }
+
+                          return (
+                            <td
+                              key={inv.id}
+                              className="text-right tabular po-unit-rate-display"
+                              onDoubleClick={() => startEditingGstTds(inv)}
+                              title="Double-click to edit"
+                            >
+                              {effectiveGstTds && effectiveGstTds !== 0 ? fmtNum(effectiveGstTds, 0) : "-"}
                             </td>
                           );
                         }
@@ -1174,8 +1308,14 @@ export default function POSheet() {
 
                         const r = invoiceRowById[inv.id];
                         const raw = def.getVal(r);
+                        // Days Left is a whole number of days - show it plain
+                        // (fmtNum always adds 2 decimals, e.g. "37.00").
                         const display =
-                          raw && raw !== 0
+                          def.no === 13
+                            ? raw === null || raw === undefined
+                              ? "-"
+                              : String(raw)
+                            : raw && raw !== 0
                             ? fmtNum(raw, def.decimals ?? 0)
                             : "-";
                         const accentClass = def.accentFn ? def.accentFn(raw || 0) : def.accentClass || "";
@@ -1190,7 +1330,7 @@ export default function POSheet() {
                         );
                       })}
                       <td className="text-right tabular" style={def.bold ? { fontWeight: 600 } : undefined}>
-                        {def.no === 1 || def.isDate || noInvoices || !rowTotal ? "-" : fmtNum(rowTotal, def.decimals ?? 0)}
+                        {def.no === 1 || def.isDate || def.noTotal || noInvoices || !rowTotal ? "-" : fmtNum(rowTotal, def.decimals ?? 0)}
                       </td>
                       <td></td>
                     </tr>

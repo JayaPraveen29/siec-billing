@@ -321,20 +321,6 @@ function DayRows({ day }) {
           </td>
         </tr>
       ))}
-      <tr className="datewise-subtotal-row">
-        <td colSpan={3} className="text-right">Subtotal</td>
-        <td className="text-right tabular">{fmtNum(day.subtotal.qty, 1)}</td>
-        <td className="text-right tabular">{fmtNum(day.subtotal.basic, 0)}</td>
-        <td className="text-right tabular">{fmtNum(day.subtotal.gst, 0)}</td>
-        <td className="text-right tabular">{fmtNum(day.subtotal.tds, 0)}</td>
-        <td className="text-right tabular">{fmtNum(day.subtotal.roundOff, 2)}</td>
-        <td className="text-right tabular">{fmtNum(day.subtotal.grossValue, 2)}</td>
-        <td className="text-right tabular">{fmtNum(day.subtotal.matAdvance, 0)}</td>
-        <td className="text-right tabular">{fmtNum(day.subtotal.netReceivable, 0)}</td>
-        <td></td>
-        <td className="text-right tabular">{fmtNum(day.subtotal.paymentReceived, 0)}</td>
-        <td className="text-right tabular">{fmtNum(day.subtotal.balanceToReceive, 0)}</td>
-      </tr>
     </>
   );
 }

@@ -83,7 +83,6 @@ export function exportDateWiseReportToExcel(
     d.rows.forEach((r, idx) => {
       rows.push(rowToArray(r, idx, fmtDate(d.date)));
     });
-    rows.push(subtotalToArray("Subtotal", d.subtotal));
   });
 
   rows.push(subtotalToArray("Grand Total", report.grandTotal));
@@ -168,20 +167,6 @@ export async function exportDateWiseReportToPDF(
         fmtNum(r.balanceToReceive, 0),
       ]);
     });
-    body.push([
-      { content: "Subtotal", colSpan: 3 },
-      fmtNum(d.subtotal.qty, 1),
-      fmtNum(d.subtotal.basic, 0),
-      fmtNum(d.subtotal.gst, 0),
-      fmtNum(d.subtotal.tds, 0),
-      fmtNum(d.subtotal.roundOff, 2),
-      fmtNum(d.subtotal.grossValue, 2),
-      fmtNum(d.subtotal.matAdvance, 0),
-      fmtNum(d.subtotal.netReceivable, 0),
-      "",
-      fmtNum(d.subtotal.paymentReceived, 0),
-      fmtNum(d.subtotal.balanceToReceive, 0),
-    ]);
   });
 
   if (report.pending && report.pending.length > 0) {

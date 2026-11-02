@@ -136,7 +136,16 @@ export function computePOLedger(po, items, invoices) {
     }
 
     // Coal Tub only: GST TDS @ 2% of Basic, subtracted from the invoice value.
-    const gstTds = isCT ? (basic * CT_GST_TDS_PERCENT) / 100 : 0;
+    // Can be overridden by hand (double-click on the PO sheet). Blank = auto.
+    const gstTds =
+      isCT &&
+      inv.gstTdsOverride !== undefined &&
+      inv.gstTdsOverride !== "" &&
+      inv.gstTdsOverride !== null
+        ? num(inv.gstTdsOverride)
+        : isCT
+        ? (basic * CT_GST_TDS_PERCENT) / 100
+        : 0;
 
     const tds =
       inv.tdsOverride !== undefined && inv.tdsOverride !== ""
@@ -165,6 +174,17 @@ export function computePOLedger(po, items, invoices) {
           ) + 1
         : null;
 
+    // Plain date difference (payment date - bill date), no +1. Used by the
+    // PO sheet's "Days Left" row. (`days` above stays inclusive for reports.)
+    const daysLeft =
+      inv.paymentDate && inv.invoiceDate
+        ? Math.round(
+            (new Date(inv.paymentDate).getTime() -
+              new Date(inv.invoiceDate).getTime()) /
+              86400000
+          )
+        : null;
+
     return {
       ...inv,
       qty,
@@ -189,6 +209,7 @@ export function computePOLedger(po, items, invoices) {
       isUnpaid: Math.abs(balanceToReceive) > 1,
       matAdvanceBalance: runningMatAdvBal,
       days,
+      daysLeft,
     };
   });
 

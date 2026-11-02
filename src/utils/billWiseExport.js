@@ -4,42 +4,41 @@
 
 import * as XLSX from "xlsx";
 import { fmtNum, fmtDate, drawPdfCompany } from "./format";
-import { PAYMENT_STATUS_LABELS } from "./billWiseReport";
-
-const HEADERS = [
-  "Bill No.",
-  "Bill Date",
-  "PO",
-  "Qty",
-  "Gross Value",
-  "Mat. Adv.",
-  "TDS",
-  "Net Recv.",
-  "Payment Date",
-  "Paid",
-  "Balance",
-  "Payment Status",
-];
+import { billWiseQtyColumns } from "./billWiseReport";
 
 function stamp() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function rowToArray(r) {
-  return [
-    r.billNo,
-    fmtDate(r.billDate),
-    r.poCode,
-    fmtNum(r.qty, 1),
-    fmtNum(r.grossValue, 2),
-    fmtNum(r.matAdvance, 0),
-    fmtNum(r.tds, 0),
-    fmtNum(r.netReceivable, 0),
-    r.paymentDate ? fmtDate(r.paymentDate) : "-",
-    fmtNum(r.paymentReceived, 0),
-    fmtNum(r.balanceToReceive, 0),
-    PAYMENT_STATUS_LABELS[r.paymentStatus] || r.paymentStatus,
+// Column specs. `v` = row value, `t` = Grand Total value (omit for blank),
+// `w` = Excel width, `right` = right-aligned in the PDF.
+function buildColumns({ showArea = true, qtyCols } = {}) {
+  const qc = qtyCols || billWiseQtyColumns("all");
+  const cols = [
+    { h: "Bill No.", v: (r) => r.billNo, t: () => "Grand Total", w: 12 },
+    { h: "Bill Date", v: (r) => fmtDate(r.billDate), w: 12 },
+    { h: "PO", v: (r) => r.poCode, w: 16 },
   ];
+  if (showArea) cols.push({ h: "Area", v: (r) => r.area || "-", w: 18 });
+  qc.forEach((c) =>
+    cols.push({
+      h: c.label,
+      v: (r) => (r[c.key] > 0 ? fmtNum(r[c.key], c.type === "CT" ? 0 : 1) : "-"),
+      t: (g) => fmtNum(g[c.key], c.type === "CT" ? 0 : 1),
+      w: 12,
+      right: true,
+    })
+  );
+  cols.push(
+    { h: "Gross Value", v: (r) => fmtNum(r.grossValue, 2), t: (g) => fmtNum(g.grossValue, 2), w: 13, right: true },
+    { h: "Mat. Adv.", v: (r) => fmtNum(r.matAdvance, 0), t: (g) => fmtNum(g.matAdvance, 0), w: 11, right: true },
+    { h: "TDS", v: (r) => fmtNum(r.tds, 0), t: (g) => fmtNum(g.tds, 0), w: 10, right: true },
+    { h: "Net Recv.", v: (r) => fmtNum(r.netReceivable, 0), t: (g) => fmtNum(g.netReceivable, 0), w: 13, right: true },
+    { h: "Payment Date", v: (r) => (r.paymentDate ? fmtDate(r.paymentDate) : "-"), w: 13 },
+    { h: "Paid", v: (r) => fmtNum(r.paymentReceived, 0), t: (g) => fmtNum(g.paymentReceived, 0), w: 12, right: true },
+    { h: "Balance", v: (r) => fmtNum(r.balanceToReceive, 0), t: (g) => fmtNum(g.balanceToReceive, 0), w: 12, right: true }
+  );
+  return cols;
 }
 
 // ---------------------------------------------------------------------------
@@ -49,44 +48,17 @@ function rowToArray(r) {
 export function exportBillWiseReportToExcel(
   report,
   rows,
-  filename = `Bill-Wise-Report-${stamp()}.xlsx`
+  { showArea = true, qtyCols, filename = `Bill-Wise-Report-${stamp()}.xlsx` } = {}
 ) {
   if (!report) return;
 
-  const data = [HEADERS];
-  rows.forEach((r) => data.push(rowToArray(r)));
-
-  data.push([
-    "Grand Total",
-    "",
-    "",
-    fmtNum(report.grandTotal.qty, 1),
-    fmtNum(report.grandTotal.grossValue, 2),
-    fmtNum(report.grandTotal.matAdvance, 0),
-    fmtNum(report.grandTotal.tds, 0),
-    fmtNum(report.grandTotal.netReceivable, 0),
-    "",
-    fmtNum(report.grandTotal.paymentReceived, 0),
-    fmtNum(report.grandTotal.balanceToReceive, 0),
-    "",
-  ]);
+  const cols = buildColumns({ showArea, qtyCols });
+  const data = [cols.map((c) => c.h)];
+  rows.forEach((r) => data.push(cols.map((c) => c.v(r))));
+  data.push(cols.map((c) => (c.t ? c.t(report.grandTotal) : "")));
 
   const ws = XLSX.utils.aoa_to_sheet(data);
-
-  ws["!cols"] = [
-    { wch: 12 }, // Bill No
-    { wch: 12 }, // Bill Date
-    { wch: 16 }, // PO
-    { wch: 10 }, // Qty
-    { wch: 13 }, // Gross Value
-    { wch: 11 }, // Mat Adv
-    { wch: 10 }, // TDS
-    { wch: 13 }, // Net Recv
-    { wch: 13 }, // Payment Date
-    { wch: 12 }, // Paid
-    { wch: 12 }, // Balance
-    { wch: 15 }, // Payment Status
-  ];
+  ws["!cols"] = cols.map((c) => ({ wch: c.w }));
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Bill Wise Report");
@@ -100,7 +72,7 @@ export function exportBillWiseReportToExcel(
 export async function exportBillWiseReportToPDF(
   report,
   rows,
-  { company, filename = `Bill-Wise-Report-${stamp()}.pdf` } = {}
+  { company, showArea = true, qtyCols, filename = `Bill-Wise-Report-${stamp()}.pdf` } = {}
 ) {
   if (!report) return;
 
@@ -117,27 +89,18 @@ export async function exportBillWiseReportToPDF(
   doc.setFontSize(9);
   doc.text(`Bills: ${rows.length}`, 40, 58);
 
-  const body = rows.map((r) => rowToArray(r).map((v) => String(v)));
+  const cols = buildColumns({ showArea, qtyCols });
+  const body = rows.map((r) => cols.map((c) => String(c.v(r))));
+  const footRow = cols.map((c) => (c.t ? String(c.t(report.grandTotal)) : ""));
+  const columnStyles = {};
+  cols.forEach((c, i) => {
+    if (c.right) columnStyles[i] = { halign: "right" };
+  });
 
   autoTable(doc, {
-    head: [HEADERS],
+    head: [cols.map((c) => c.h)],
     body,
-    foot: [
-      [
-        "Grand Total",
-        "",
-        "",
-        fmtNum(report.grandTotal.qty, 1),
-        fmtNum(report.grandTotal.grossValue, 2),
-        fmtNum(report.grandTotal.matAdvance, 0),
-        fmtNum(report.grandTotal.tds, 0),
-        fmtNum(report.grandTotal.netReceivable, 0),
-        "",
-        fmtNum(report.grandTotal.paymentReceived, 0),
-        fmtNum(report.grandTotal.balanceToReceive, 0),
-        "",
-      ],
-    ],
+    foot: [footRow],
     startY: 72,
     margin: { left: 40, right: 40 },
     theme: "grid",
@@ -153,15 +116,7 @@ export async function exportBillWiseReportToPDF(
     headStyles: { fillColor: false, textColor: 20, fontStyle: "normal", lineWidth: 0.5 },
     footStyles: { fillColor: false, textColor: 20, fontStyle: "normal", lineWidth: 0.5 },
     alternateRowStyles: { fillColor: false },
-    columnStyles: {
-      3: { halign: "right" },
-      4: { halign: "right" },
-      5: { halign: "right" },
-      6: { halign: "right" },
-      7: { halign: "right" },
-      9: { halign: "right" },
-      10: { halign: "right" },
-    },
+    columnStyles,
   });
 
   doc.save(filename);

@@ -4,52 +4,49 @@
 
 import * as XLSX from "xlsx";
 import { fmtNum, drawPdfCompany } from "./format";
-import { QTY_STATUS_LABELS, PAYMENT_STATUS_LABELS } from "./poWiseReport";
+import { QTY_STATUS_LABELS, PAYMENT_STATUS_LABELS, getPOWiseColumnConfig } from "./poWiseReport";
 
-const HEADERS = [
-  "PO Code",
-  "PO No.",
-  "Invoices",
-  "Wt. Ordered",
-  "Wt. Billed",
-  "Wt. Balance",
-  "% Complete",
-  "Qty Status",
-  "Basic",
-  "GST",
-  "Gross Value",
-  "Mat. Adv.",
-  "TDS",
-  "Net Recv.",
-  "Paid Amount",
-  "Balance",
-  "Payment Status",
-];
+// Column specs: one entry per column. `v` reads a row value, `t` reads the
+// Grand Total value; `dec` is the decimals used in the PDF; `right` aligns
+// numbers right; `w` is the Excel column width. The set of columns depends on
+// the Work Type filter (see getPOWiseColumnConfig).
+function buildColumns(workType) {
+  const cfg = getPOWiseColumnConfig(workType);
+  const n = (x) => Number(x) || 0;
+  const cols = [
+    { h: "PO Code", v: (r) => r.poCode, t: () => "Grand Total", w: 16 },
+    { h: "PO No.", v: (r) => r.poNumber, w: 12 },
+    { h: "Invoices", v: (r) => r.invoiceCount, w: 9, right: true },
+    ...(cfg.showNos
+      ? [
+          { h: "Nos. Ordered", v: (r) => (r.isCT ? n(r.nosOrdered) : "-"), t: (g) => n(g.nosOrdered), dec: 0, w: 12, right: true },
+        ]
+      : []),
+    { h: "Wt. Ordered (kg)", v: (r) => n(r.kgOrdered), t: (g) => n(g.kgOrdered), dec: 1, w: 15, right: true },
+    { h: "Wt. Billed (kg)", v: (r) => n(r.kgBilled), t: (g) => n(g.kgBilled), dec: 1, w: 14, right: true },
+    { h: "Wt. Balance (kg)", v: (r) => n(r.kgBalance), t: (g) => n(g.kgBalance), dec: 1, w: 15, right: true },
+    { h: "% Complete", v: (r) => `${fmtNum(r.pctComplete, 0)}%`, w: 11, right: true },
+    { h: "Qty Status", v: (r) => QTY_STATUS_LABELS[r.qtyStatus] || r.qtyStatus, w: 13 },
+    { h: "Basic", v: (r) => n(r.basic), t: (g) => n(g.basic), dec: 0, w: 12, right: true },
+    { h: "GST", v: (r) => n(r.gst), t: (g) => n(g.gst), dec: 0, w: 10, right: true },
+    { h: "Gross Value", v: (r) => n(r.grossValue), t: (g) => n(g.grossValue), dec: 2, w: 13, right: true },
+  ];
+  if (cfg.showMatAdv)
+    cols.push({ h: "Mat. Adv.", v: (r) => n(r.matAdvance), t: (g) => n(g.matAdvance), dec: 0, w: 11, right: true });
+  if (cfg.showGstTds)
+    cols.push({ h: "GST TDS @2%", v: (r) => n(r.gstTds), t: (g) => n(g.gstTds), dec: 0, w: 12, right: true });
+  cols.push(
+    { h: "TDS", v: (r) => n(r.tds), t: (g) => n(g.tds), dec: 0, w: 10, right: true },
+    { h: "Net Recv.", v: (r) => n(r.netReceivable), t: (g) => n(g.netReceivable), dec: 0, w: 13, right: true },
+    { h: "Paid Amount", v: (r) => n(r.paymentReceived), t: (g) => n(g.paymentReceived), dec: 0, w: 13, right: true },
+    { h: "Balance", v: (r) => n(r.balanceToReceive), t: (g) => n(g.balanceToReceive), dec: 0, w: 12, right: true },
+    { h: "Payment Status", v: (r) => PAYMENT_STATUS_LABELS[r.paymentStatus] || r.paymentStatus, w: 15 }
+  );
+  return cols;
+}
 
 function stamp() {
   return new Date().toISOString().slice(0, 10);
-}
-
-function rowToArray(r) {
-  return [
-    r.poCode,
-    r.poNumber,
-    r.invoiceCount,
-    Number(r.weightOrdered) || 0,
-    Number(r.weightBilled) || 0,
-    Number(r.weightBalance) || 0,
-    `${fmtNum(r.pctComplete, 0)}%`,
-    QTY_STATUS_LABELS[r.qtyStatus] || r.qtyStatus,
-    Number(r.basic) || 0,
-    Number(r.gst) || 0,
-    Number(r.grossValue) || 0,
-    Number(r.matAdvance) || 0,
-    Number(r.tds) || 0,
-    Number(r.netReceivable) || 0,
-    Number(r.paymentReceived) || 0,
-    Number(r.balanceToReceive) || 0,
-    PAYMENT_STATUS_LABELS[r.paymentStatus] || r.paymentStatus,
-  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -59,54 +56,17 @@ function rowToArray(r) {
 export function exportPOWiseReportToExcel(
   report,
   rows,
-  filename = `PO-Wise-Report-${stamp()}.xlsx`
+  { workType, filename = `PO-Wise-Report-${stamp()}.xlsx` } = {}
 ) {
   if (!report) return;
 
-  const data = [HEADERS];
-  rows.forEach((r) => data.push(rowToArray(r)));
-
-  data.push([
-    "Grand Total",
-    "",
-    "",
-    Number(report.grandTotal.weightOrdered) || 0,
-    Number(report.grandTotal.weightBilled) || 0,
-    Number(report.grandTotal.weightBalance) || 0,
-    "",
-    "",
-    Number(report.grandTotal.basic) || 0,
-    Number(report.grandTotal.gst) || 0,
-    Number(report.grandTotal.grossValue) || 0,
-    Number(report.grandTotal.matAdvance) || 0,
-    Number(report.grandTotal.tds) || 0,
-    Number(report.grandTotal.netReceivable) || 0,
-    Number(report.grandTotal.paymentReceived) || 0,
-    Number(report.grandTotal.balanceToReceive) || 0,
-    "",
-  ]);
+  const cols = buildColumns(workType);
+  const data = [cols.map((c) => c.h)];
+  rows.forEach((r) => data.push(cols.map((c) => c.v(r))));
+  data.push(cols.map((c) => (c.t ? c.t(report.grandTotal) : "")));
 
   const ws = XLSX.utils.aoa_to_sheet(data);
-
-  ws["!cols"] = [
-    { wch: 16 }, // PO Code
-    { wch: 12 }, // PO No
-    { wch: 9 }, // Invoices
-    { wch: 12 }, // Wt Ordered
-    { wch: 11 }, // Wt Billed
-    { wch: 12 }, // Wt Balance
-    { wch: 11 }, // % Complete
-    { wch: 13 }, // Qty Status
-    { wch: 12 }, // Basic
-    { wch: 10 }, // GST
-    { wch: 13 }, // Gross Value
-    { wch: 11 }, // Mat Adv
-    { wch: 10 }, // TDS
-    { wch: 13 }, // Net Recv
-    { wch: 13 }, // Paid Amount
-    { wch: 12 }, // Balance
-    { wch: 15 }, // Payment Status
-  ];
+  ws["!cols"] = cols.map((c) => ({ wch: c.w }));
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "PO Wise Report");
@@ -117,10 +77,15 @@ export function exportPOWiseReportToExcel(
 // PDF export
 // ---------------------------------------------------------------------------
 
+// PDF cells: numbers get the column's decimals, text stays as-is.
+function fmtPdf(c, v) {
+  return c.dec !== undefined && typeof v === "number" ? fmtNum(v, c.dec) : String(v);
+}
+
 export async function exportPOWiseReportToPDF(
   report,
   rows,
-  { company, filename = `PO-Wise-Report-${stamp()}.pdf` } = {}
+  { company, workType, filename = `PO-Wise-Report-${stamp()}.pdf` } = {}
 ) {
   if (!report) return;
 
@@ -137,32 +102,20 @@ export async function exportPOWiseReportToPDF(
   doc.setFontSize(9);
   doc.text(`POs: ${rows.length}`, 40, 58);
 
-  const body = rows.map((r) => rowToArray(r).map((v) => String(v)));
+  const cols = buildColumns(workType);
+  const body = rows.map((r) => cols.map((c) => fmtPdf(c, c.v(r))));
+  const footRow = cols.map((c, i) =>
+    c.t ? fmtPdf(c, c.t(report.grandTotal)) : i === 0 ? "Grand Total" : ""
+  );
+  const columnStyles = {};
+  cols.forEach((c, i) => {
+    if (c.right) columnStyles[i] = { halign: "right" };
+  });
 
   autoTable(doc, {
-    head: [HEADERS],
+    head: [cols.map((c) => c.h)],
     body,
-    foot: [
-      [
-        "Grand Total",
-        "",
-        "",
-        fmtNum(report.grandTotal.weightOrdered, 1),
-        fmtNum(report.grandTotal.weightBilled, 1),
-        fmtNum(report.grandTotal.weightBalance, 1),
-        "",
-        "",
-        fmtNum(report.grandTotal.basic, 0),
-        fmtNum(report.grandTotal.gst, 0),
-        fmtNum(report.grandTotal.grossValue, 2),
-        fmtNum(report.grandTotal.matAdvance, 0),
-        fmtNum(report.grandTotal.tds, 0),
-        fmtNum(report.grandTotal.netReceivable, 0),
-        fmtNum(report.grandTotal.paymentReceived, 0),
-        fmtNum(report.grandTotal.balanceToReceive, 0),
-        "",
-      ],
-    ],
+    foot: [footRow],
     startY: 72,
     margin: { left: 40, right: 40 },
     theme: "grid",
@@ -178,20 +131,7 @@ export async function exportPOWiseReportToPDF(
     headStyles: { fillColor: false, textColor: 20, fontStyle: "normal", lineWidth: 0.5 },
     footStyles: { fillColor: false, textColor: 20, fontStyle: "normal", lineWidth: 0.5 },
     alternateRowStyles: { fillColor: false },
-    columnStyles: {
-      3: { halign: "right" },
-      4: { halign: "right" },
-      5: { halign: "right" },
-      6: { halign: "right" },
-      8: { halign: "right" },
-      9: { halign: "right" },
-      10: { halign: "right" },
-      11: { halign: "right" },
-      12: { halign: "right" },
-      13: { halign: "right" },
-      14: { halign: "right" },
-      15: { halign: "right" },
-    },
+    columnStyles,
   });
 
   doc.save(filename);

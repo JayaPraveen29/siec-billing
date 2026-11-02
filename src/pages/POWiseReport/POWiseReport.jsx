@@ -6,6 +6,7 @@ import {
   computePOWiseReport,
   filterPOWiseRows,
   QTY_STATUS_LABELS,
+  getPOWiseColumnConfig,
   PAYMENT_STATUS_LABELS,
 } from "../../utils/poWiseReport";
 import { fmtNum, fmtINR , fmtToday } from "../../utils/format";
@@ -66,6 +67,8 @@ export default function POWiseReport() {
     );
   }, [allData, group, workType]);
 
+  const cols = getPOWiseColumnConfig(workType);
+
   const visibleRows = useMemo(() => {
     if (!report) return [];
     return filterPOWiseRows(report.rows, { search, qtyStatus, paymentStatus });
@@ -73,14 +76,14 @@ export default function POWiseReport() {
 
   function handleExportExcel() {
     if (!report) return;
-    exportPOWiseReportToExcel(report, visibleRows);
+    exportPOWiseReportToExcel(report, visibleRows, { workType });
   }
 
   async function handleExportPdf() {
     if (!report) return;
     setExportingPdf(true);
     try {
-      await exportPOWiseReportToPDF(report, visibleRows, { company: group });
+      await exportPOWiseReportToPDF(report, visibleRows, { company: group, workType });
     } finally {
       setExportingPdf(false);
     }
@@ -160,12 +163,14 @@ export default function POWiseReport() {
               <tr>
                 <th>PO</th>
                 <th className="text-right">Invoices</th>
-                <th className="text-right">Wt. Ordered</th>
-                <th className="text-right">Wt. Billed</th>
-                <th className="text-right">Wt. Balance</th>
+                {cols.showNos && <th className="text-right">Nos. Ordered</th>}
+                <th className="text-right">Wt. Ordered (kg)</th>
+                <th className="text-right">Wt. Billed (kg)</th>
+                <th className="text-right">Wt. Balance (kg)</th>
                 <th>Qty Status</th>
                 <th className="text-right">Gross Value</th>
-                <th className="text-right">Mat. Adv.</th>
+                {cols.showMatAdv && <th className="text-right">Mat. Adv.</th>}
+                {cols.showGstTds && <th className="text-right">GST TDS @2%</th>}
                 <th className="text-right">TDS</th>
                 <th className="text-right">Net Recv.</th>
                 <th className="text-right">Paid</th>
@@ -182,9 +187,12 @@ export default function POWiseReport() {
                 >
                   <td className="text-rivet">{r.poCode}</td>
                   <td className="text-right tabular">{r.invoiceCount}</td>
-                  <td className="text-right tabular">{fmtNum(r.weightOrdered, 1)}</td>
-                  <td className="text-right tabular">{fmtNum(r.weightBilled, 1)}</td>
-                  <td className="text-right tabular">{fmtNum(r.weightBalance, 1)}</td>
+                  {cols.showNos && (
+                    <td className="text-right tabular">{r.isCT ? fmtNum(r.nosOrdered, 0) : "-"}</td>
+                  )}
+                  <td className="text-right tabular">{fmtNum(r.kgOrdered, 1)}</td>
+                  <td className="text-right tabular">{fmtNum(r.kgBilled, 1)}</td>
+                  <td className="text-right tabular">{fmtNum(r.kgBalance, 1)}</td>
                   <td>
                     <span className={`powise-badge qty-${r.qtyStatus}`}>
                       {QTY_STATUS_LABELS[r.qtyStatus]}
@@ -193,7 +201,12 @@ export default function POWiseReport() {
                   <td className="text-right tabular" style={{ fontWeight: 600 }}>
                     {fmtNum(r.grossValue, 2)}
                   </td>
-                  <td className="text-right tabular">{fmtNum(r.matAdvance, 0)}</td>
+                  {cols.showMatAdv && (
+                    <td className="text-right tabular">{fmtNum(r.matAdvance, 0)}</td>
+                  )}
+                  {cols.showGstTds && (
+                    <td className="text-right tabular">{fmtNum(r.gstTds, 0)}</td>
+                  )}
                   <td className="text-right tabular">{fmtNum(r.tds, 0)}</td>
                   <td className="text-right tabular text-rivet2">
                     {fmtNum(r.netReceivable, 0)}
@@ -218,18 +231,26 @@ export default function POWiseReport() {
               <tr>
                 <td>Grand Total</td>
                 <td></td>
+                {cols.showNos && (
+                  <td className="text-right tabular">{fmtNum(report.grandTotal.nosOrdered, 0)}</td>
+                )}
                 <td className="text-right tabular">
-                  {fmtNum(report.grandTotal.weightOrdered, 1)}
+                  {fmtNum(report.grandTotal.kgOrdered, 1)}
                 </td>
                 <td className="text-right tabular">
-                  {fmtNum(report.grandTotal.weightBilled, 1)}
+                  {fmtNum(report.grandTotal.kgBilled, 1)}
                 </td>
                 <td className="text-right tabular">
-                  {fmtNum(report.grandTotal.weightBalance, 1)}
+                  {fmtNum(report.grandTotal.kgBalance, 1)}
                 </td>
                 <td></td>
                 <td className="text-right tabular">{fmtINR(report.grandTotal.grossValue)}</td>
-                <td className="text-right tabular">{fmtINR(report.grandTotal.matAdvance)}</td>
+                {cols.showMatAdv && (
+                  <td className="text-right tabular">{fmtINR(report.grandTotal.matAdvance)}</td>
+                )}
+                {cols.showGstTds && (
+                  <td className="text-right tabular">{fmtINR(report.grandTotal.gstTds)}</td>
+                )}
                 <td className="text-right tabular">{fmtINR(report.grandTotal.tds)}</td>
                 <td className="text-right tabular text-rivet2">
                   {fmtINR(report.grandTotal.netReceivable)}

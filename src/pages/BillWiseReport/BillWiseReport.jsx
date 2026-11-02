@@ -5,7 +5,8 @@ import { fetchAllPOData } from "../../services/poService";
 import {
   computeBillWiseReport,
   filterBillWiseRows,
-  PAYMENT_STATUS_LABELS,
+  billWiseShowArea,
+  billWiseQtyColumns,
 } from "../../utils/billWiseReport";
 import { fmtNum, fmtINR, fmtDate , fmtToday } from "../../utils/format";
 import {
@@ -58,6 +59,9 @@ export default function BillWiseReport() {
     );
   }, [allData, group, workType]);
 
+  const showArea = billWiseShowArea(workType);
+  const qtyCols = billWiseQtyColumns(workType);
+
   const visibleRows = useMemo(() => {
     if (!report) return [];
     return filterBillWiseRows(report.rows, {
@@ -70,14 +74,14 @@ export default function BillWiseReport() {
 
   function handleExportExcel() {
     if (!report) return;
-    exportBillWiseReportToExcel(report, visibleRows);
+    exportBillWiseReportToExcel(report, visibleRows, { showArea, qtyCols });
   }
 
   async function handleExportPdf() {
     if (!report) return;
     setExportingPdf(true);
     try {
-      await exportBillWiseReportToPDF(report, visibleRows, { company: group });
+      await exportBillWiseReportToPDF(report, visibleRows, { company: group, showArea, qtyCols });
     } finally {
       setExportingPdf(false);
     }
@@ -186,7 +190,10 @@ export default function BillWiseReport() {
                 <th>Bill No.</th>
                 <th>Bill Date</th>
                 <th>PO</th>
-                <th className="text-right">Qty</th>
+                {showArea && <th>Area</th>}
+                {qtyCols.map((c) => (
+                  <th key={c.key} className="text-right">{c.label}</th>
+                ))}
                 <th className="text-right">Gross Value</th>
                 <th className="text-right">Mat. Adv.</th>
                 <th className="text-right">TDS</th>
@@ -194,7 +201,6 @@ export default function BillWiseReport() {
                 <th>Payment Date</th>
                 <th className="text-right">Paid</th>
                 <th className="text-right">Balance</th>
-                <th>Payment Status</th>
               </tr>
             </thead>
             <tbody>
@@ -207,7 +213,12 @@ export default function BillWiseReport() {
                   <td className="text-rivet">{r.billNo}</td>
                   <td>{fmtDate(r.billDate)}</td>
                   <td>{r.poCode}</td>
-                  <td className="text-right tabular">{fmtNum(r.qty, 1)}</td>
+                  {showArea && <td>{r.area || "-"}</td>}
+                  {qtyCols.map((c) => (
+                    <td key={c.key} className="text-right tabular">
+                      {r[c.key] > 0 ? fmtNum(r[c.key], c.type === "CT" ? 0 : 1) : "-"}
+                    </td>
+                  ))}
                   <td className="text-right tabular" style={{ fontWeight: 600 }}>
                     {fmtNum(r.grossValue, 2)}
                   </td>
@@ -225,11 +236,6 @@ export default function BillWiseReport() {
                   >
                     {fmtNum(r.balanceToReceive, 0)}
                   </td>
-                  <td>
-                    <span className={`billwise-badge pay-${r.paymentStatus}`}>
-                      {PAYMENT_STATUS_LABELS[r.paymentStatus]}
-                    </span>
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -238,7 +244,12 @@ export default function BillWiseReport() {
                 <td>Grand Total</td>
                 <td></td>
                 <td></td>
-                <td className="text-right tabular">{fmtNum(report.grandTotal.qty, 1)}</td>
+                {showArea && <td></td>}
+                {qtyCols.map((c) => (
+                  <td key={c.key} className="text-right tabular">
+                    {fmtNum(report.grandTotal[c.key], c.type === "CT" ? 0 : 1)}
+                  </td>
+                ))}
                 <td className="text-right tabular">{fmtINR(report.grandTotal.grossValue)}</td>
                 <td className="text-right tabular">{fmtINR(report.grandTotal.matAdvance)}</td>
                 <td className="text-right tabular">{fmtINR(report.grandTotal.tds)}</td>
@@ -252,7 +263,6 @@ export default function BillWiseReport() {
                 <td className="text-right tabular">
                   {fmtINR(report.grandTotal.balanceToReceive)}
                 </td>
-                <td></td>
               </tr>
             </tfoot>
           </table>
