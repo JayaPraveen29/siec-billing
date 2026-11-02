@@ -9,6 +9,7 @@
 
 import { PO_GROUPS } from "./groups";
 import { inFinancialYear } from "./financialYear";
+import { CT_TUB_WEIGHT_KG, ctItemNumbers } from "./ledger";
 
 function num(v) {
   const n = Number(v);
@@ -32,7 +33,10 @@ export function computeAveragePriceReport(poSheets, { fy = "all" } = {}) {
       inFinancialYear(inv.invoiceDate, fy)
     );
     if (fy !== "all" && fyInvoices.length === 0) return;
-    const unitRate = num(po.unitRate);
+    const isCT = po.workType === "CT";
+    // Coal Tub POs are priced per tub (Nos.), not per kg:
+    //   KG price = unit rate / 586      qty kg = PO qty (Nos.) x 586
+    const unitRate = isCT ? num(po.unitRate) / CT_TUB_WEIGHT_KG : num(po.unitRate);
     const bucketKey = PO_GROUPS.includes(po.group) ? po.group : "other";
 
     // One row per PO: every item of the PO is rolled into that PO's row.
@@ -48,9 +52,9 @@ export function computeAveragePriceReport(poSheets, { fy = "all" } = {}) {
     };
 
     (items || []).forEach((item) => {
-      const ordered = num(item.weightKg);
+      const ordered = isCT ? ctItemNumbers(item) * CT_TUB_WEIGHT_KG : num(item.weightKg);
       row.weightMT += ordered / 1000;
-      row.basic += ordered * unitRate; // ordered kg x PO rate (Rs/kg)
+      row.basic += ordered * unitRate; // ordered kg x rate per kg (CT: unit rate / 586)
     });
 
     // Ordered MT / Basic go under the PO's own group (SIEC or ST).
