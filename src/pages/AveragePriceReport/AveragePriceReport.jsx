@@ -23,13 +23,13 @@ import "./AveragePriceReport.css";
 //   | SIEC / ST / Total  ->  STRL / CT / SCRAP  ->  MT / Rate / Value
 // With a company selected only that company's block is shown.
 // ---------------------------------------------------------------------------
-const LEAD = ["PO No.", "Weight (MT)", "Rate (Rs/MT)", "Basic"];
+const LEAD = ["PO No."];
 const SUB = ["MT", "Rate", "Value"];
 
 const sectionsFor = (company) => (PO_GROUPS.includes(company) ? [company] : SECTIONS);
 
 function cells(r, sections) {
-  const out = [r.section, fmtNum(r.weightMT), fmtNum(r.rate), fmtNum(r.basic)];
+  const out = [r.section];
   sections.forEach((s) =>
     WORK_TYPES.forEach((w) => {
       const b = r.cells[s][w];
@@ -263,9 +263,6 @@ export default function AveragePriceReport() {
             <thead>
               <tr>
                 <th rowSpan={3}>PO No.</th>
-                <th rowSpan={3} className="text-right">Weight (MT)</th>
-                <th rowSpan={3} className="text-right">Rate (₹/MT)</th>
-                <th rowSpan={3} className="text-right">Basic</th>
                 {sections.map((s) => (
                   <th key={s} colSpan={WORK_TYPES.length * 3} className="avgp-group">
                     {s}
@@ -297,9 +294,6 @@ export default function AveragePriceReport() {
               {visibleRows.map((r) => (
                 <tr key={r.poId || r.section}>
                   <td className="text-rivet">{r.section}</td>
-                  <td className="text-right tabular">{fmtNum(r.weightMT)}</td>
-                  <td className="text-right tabular">{fmtNum(r.rate)}</td>
-                  <td className="text-right tabular">{fmtNum(r.basic)}</td>
                   {sections.flatMap((s) =>
                     WORK_TYPES.map((w) => <CellTriple key={`${s}-${w}`} b={r.cells[s][w]} />)
                   )}
@@ -309,9 +303,6 @@ export default function AveragePriceReport() {
             <tfoot>
               <tr>
                 <td>Grand Total</td>
-                <td className="text-right tabular">{fmtNum(total.weightMT)}</td>
-                <td className="text-right tabular">{fmtNum(total.rate)}</td>
-                <td className="text-right tabular">{fmtINR(total.basic)}</td>
                 {sections.flatMap((s) =>
                   WORK_TYPES.map((w) => <CellTriple key={`${s}-${w}`} b={total.cells[s][w]} money />)
                 )}
