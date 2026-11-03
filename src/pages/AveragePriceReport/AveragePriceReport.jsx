@@ -7,7 +7,6 @@ import {
   filterAveragePriceRows,
   sumAveragePriceRows,
   bucketRate,
-  SECTIONS,
 } from "../../utils/averagePriceReport";
 import { fyLabel, listFinancialYears } from "../../utils/financialYear";
 import { PO_GROUPS, WORK_TYPES, matchesGroup, matchesWorkType } from "../../utils/groups";
@@ -26,14 +25,15 @@ import "./AveragePriceReport.css";
 const LEAD = ["PO No."];
 const SUB = ["MT", "Rate", "Value"];
 
-const sectionsFor = (company) => (PO_GROUPS.includes(company) ? [company] : SECTIONS);
+// A company selected -> only that company; no company -> only the overall Total.
+const sectionsFor = (company) => (PO_GROUPS.includes(company) ? [company] : ["Total"]);
 
-function cells(r, sections) {
+function cells(r, sections, empty = "") {
   const out = [r.section];
   sections.forEach((s) =>
     WORK_TYPES.forEach((w) => {
       const b = r.cells[s][w];
-      out.push(b.mt > 0 ? fmtNum(b.mt) : "-", b.mt > 0 ? fmtNum(bucketRate(b)) : "-", b.mt > 0 ? fmtNum(b.value) : "-");
+      out.push(b.mt > 0 ? fmtNum(b.mt) : empty, b.mt > 0 ? fmtNum(bucketRate(b)) : empty, b.mt > 0 ? fmtNum(b.value) : empty);
     })
   );
   return out;
@@ -83,7 +83,7 @@ async function exportToPDF(rows, total, company, fy) {
   const sections = sectionsFor(company);
   const { default: jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
-  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: sections.length > 1 ? "a3" : "a4" });
+  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
   drawPdfCompany(doc, company);
   doc.setFontSize(11);
   doc.setFont(undefined, "normal");
@@ -101,13 +101,13 @@ async function exportToPDF(rows, total, company, fy) {
   ];
   autoTable(doc, {
     head,
-    body: rows.map((r) => cells(r, sections).map(String)),
-    foot: [cells(total, sections).map(String)],
+    body: rows.map((r) => cells(r, sections, "").map(String)),
+    foot: [cells(total, sections, "").map(String)],
     startY: 72,
     margin: { left: 24, right: 24 },
     theme: "grid",
     styles: {
-      fontSize: sections.length > 1 ? 5 : 6.5,
+      fontSize: 6.5,
       cellPadding: 2,
       valign: "middle",
       lineColor: [0, 0, 0],
@@ -328,9 +328,9 @@ function CellTriple({ b, money }) {
   const has = b.mt > 0;
   return (
     <>
-      <td className="text-right tabular avgp-sep">{has ? fmtNum(b.mt) : "-"}</td>
-      <td className="text-right tabular">{has ? fmtNum(bucketRate(b)) : "-"}</td>
-      <td className="text-right tabular">{has ? (money ? fmtINR(b.value) : fmtNum(b.value)) : "-"}</td>
+      <td className="text-right tabular avgp-sep">{has ? fmtNum(b.mt) : ""}</td>
+      <td className="text-right tabular">{has ? fmtNum(bucketRate(b)) : ""}</td>
+      <td className="text-right tabular">{has ? (money ? fmtINR(b.value) : fmtNum(b.value)) : ""}</td>
     </>
   );
 }
