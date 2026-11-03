@@ -106,6 +106,38 @@ export default function POSheet() {
     setEditingDescId(null);
   }
 
+  // Inline-editable Wt./Kg cell (Nos. for Coal Tub POs). Double-click to edit;
+  // Enter / click-away saves, Escape cancels. Coal Tub: weight = Nos. x 586.
+  const [editingWtId, setEditingWtId] = useState(null);
+  const [wtDraft, setWtDraft] = useState("");
+
+  function startEditingWt(it) {
+    setWtDraft(String(isCT ? it.orderedQty ?? "" : it.weightKg ?? ""));
+    setEditingWtId(it.id);
+  }
+
+  function cancelEditingWt() {
+    setWtDraft("");
+    setEditingWtId(null);
+  }
+
+  async function saveWt(it, rawValue) {
+    const value = rawValue.trim();
+    const n = Number(value);
+    const current = isCT ? Number(it.orderedQty) : Number(it.weightKg);
+    if (value !== "" && Number.isFinite(n) && n >= 0 && n !== current) {
+      await updateItem(
+        id,
+        it.id,
+        isCT
+          ? { numbers: n, weightKg: Math.round(n * CT_TUB_WEIGHT_KG * 100) / 100 }
+          : { weightKg: n }
+      );
+    }
+    setWtDraft("");
+    setEditingWtId(null);
+  }
+
   // Draft values for the inline-editable Unit Rate cells (one per invoice
   // column) — some invoices don't follow the PO's default unit rate.
   const [unitRateDrafts, setUnitRateDrafts] = useState({});
@@ -526,7 +558,7 @@ export default function POSheet() {
       },
       // Days between the bill (invoice) date and the payment date. Calculated
       // automatically; shows "-" until a payment date is entered.
-      { no: 13, label: "Days Left", getVal: (r) => r?.daysLeft, noTotal: true },
+      { no: 13, label: "No. of Days", getVal: (r) => r?.daysLeft, noTotal: true },
     ];
     // Coal Tub: no Material Advance rows; GST TDS row is CT-only.
     return defs.filter((d) =>
@@ -782,7 +814,34 @@ export default function POSheet() {
                     </td>
                   )}
                   {isCT && <td>{it.area || "-"}</td>}
-                  <td className="text-right tabular">{isCT ? qd(it.orderedQty) : fmtNum(it.weightKg, 2)}</td>
+                  {editingWtId === it.id ? (
+                    <td className="text-right">
+                      <input
+                        autoFocus
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={wtDraft}
+                        onChange={(e) => setWtDraft(e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                        onBlur={(e) => saveWt(it, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") e.target.blur();
+                          if (e.key === "Escape") cancelEditingWt();
+                        }}
+                        className="input po-unit-rate-input"
+                        style={{ width: "100%", minWidth: "6rem", textAlign: "right" }}
+                      />
+                    </td>
+                  ) : (
+                    <td
+                      className="text-right tabular po-unit-rate-display"
+                      onDoubleClick={() => startEditingWt(it)}
+                      title="Double-click to edit"
+                    >
+                      {isCT ? qd(it.orderedQty) : fmtNum(it.weightKg, 2)}
+                    </td>
+                  )}
                   {sortedInvoicesForMatrix.map((inv) => {
                     const qty = Number(inv.allocations?.[it.id]) || 0;
                     return (
