@@ -7,9 +7,10 @@ import {
   filterAveragePriceRows,
   sumAveragePriceRows,
   bucketRate,
+  SECTIONS,
 } from "../../utils/averagePriceReport";
 import { fyLabel, listFinancialYears } from "../../utils/financialYear";
-import { PO_GROUPS, matchesGroup, matchesWorkType } from "../../utils/groups";
+import { PO_GROUPS, WORK_TYPES, matchesGroup, matchesWorkType } from "../../utils/groups";
 import { fmtNum, fmtINR, fmtToday, companyName, drawPdfCompany } from "../../utils/format";
 import GroupSelect, { WorkTypeSelect } from "../../components/GroupSelect";
 import TitleBlock from "../../components/TitleBlock";
@@ -18,56 +19,71 @@ import "./AveragePriceReport.css";
 
 // ---------------------------------------------------------------------------
 // Table layout shared by the screen and both exports.
-//   PO No. | Weight | Rate | Basic | SIEC (MT, Basic, Rate/MT)
-//   | ST (MT, Basic, Rate/MT)
+//   PO No. | Weight | Rate | Basic
+//   | SIEC / ST / Total  ->  STRL / CT / SCRAP  ->  MT / Rate / Value
+// With a company selected only that company's block is shown.
 // ---------------------------------------------------------------------------
 const LEAD = ["PO No.", "Weight (MT)", "Rate (Rs/MT)", "Basic"];
-const SUB = ["MT", "Basic", "Rate/MT"];
+const SUB = ["MT", "Rate", "Value"];
 
-function cells(r, units = PO_GROUPS) {
+const sectionsFor = (company) => (PO_GROUPS.includes(company) ? [company] : SECTIONS);
+
+function cells(r, sections) {
   const out = [r.section, fmtNum(r.weightMT), fmtNum(r.rate), fmtNum(r.basic)];
-  units.forEach((g) => {
-    const b = r.buckets[g];
-    out.push(fmtNum(b.mt), fmtNum(b.value), b.mt > 0 ? fmtNum(bucketRate(b)) : "-");
-  });
+  sections.forEach((s) =>
+    WORK_TYPES.forEach((w) => {
+      const b = r.cells[s][w];
+      out.push(b.mt > 0 ? fmtNum(b.mt) : "-", b.mt > 0 ? fmtNum(bucketRate(b)) : "-", b.mt > 0 ? fmtNum(b.value) : "-");
+    })
+  );
   return out;
 }
 
-function exportHeadRows() {
-  const top = [...LEAD];
-  const sub = LEAD.map(() => "");
-  PO_GROUPS.forEach((g) => {
-    top.push(g, "", "");
-    sub.push(...SUB);
+// Three header rows: company / work type / MT-Rate-Value.
+function exportHeadRows(sections) {
+  const r1 = [...LEAD];
+  const r2 = LEAD.map(() => "");
+  const r3 = LEAD.map(() => "");
+  sections.forEach((s) => {
+    r1.push(s, ...Array(WORK_TYPES.length * 3 - 1).fill(""));
+    WORK_TYPES.forEach((w) => {
+      r2.push(w, "", "");
+      r3.push(...SUB);
+    });
   });
-  return [top, sub];
+  return [r1, r2, r3];
 }
 
 function stamp() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function exportToExcel(rows, total) {
-  const [top, sub] = exportHeadRows();
-  const ws = XLSX.utils.aoa_to_sheet([top, sub, ...rows.map(cells), cells(total)]);
+function exportToExcel(rows, total, company) {
+  const sections = sectionsFor(company);
+  const [h1, h2, h3] = exportHeadRows(sections);
+  const ws = XLSX.utils.aoa_to_sheet([h1, h2, h3, ...rows.map((r) => cells(r, sections)), cells(total, sections)]);
   const merges = [];
-  LEAD.forEach((_, c) => merges.push({ s: { r: 0, c }, e: { r: 1, c } }));
-  for (let c = LEAD.length; c < top.length; c += 3)
-    merges.push({ s: { r: 0, c }, e: { r: 0, c: c + 2 } });
+  LEAD.forEach((_, c) => merges.push({ s: { r: 0, c }, e: { r: 2, c } }));
+  const per = WORK_TYPES.length * 3;
+  sections.forEach((_, i) => {
+    const c0 = LEAD.length + i * per;
+    merges.push({ s: { r: 0, c: c0 }, e: { r: 0, c: c0 + per - 1 } });
+    WORK_TYPES.forEach((__, j) =>
+      merges.push({ s: { r: 1, c: c0 + j * 3 }, e: { r: 1, c: c0 + j * 3 + 2 } })
+    );
+  });
   ws["!merges"] = merges;
-  ws["!cols"] = [{ wch: 30 }, ...Array(top.length - 1).fill({ wch: 15 })];
+  ws["!cols"] = [{ wch: 30 }, ...Array(h1.length - 1).fill({ wch: 14 })];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Average Price");
   XLSX.writeFile(wb, `Average-Price-Report-${stamp()}.xlsx`);
 }
 
 async function exportToPDF(rows, total, company, fy) {
-  // Only the selected company's block is printed: Group = ST drops the SIEC
-  // columns (and vice versa). With no Group selected, every block is printed.
-  const units = PO_GROUPS.includes(company) ? [company] : PO_GROUPS;
+  const sections = sectionsFor(company);
   const { default: jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
-  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: sections.length > 1 ? "a3" : "a4" });
   drawPdfCompany(doc, company);
   doc.setFontSize(11);
   doc.setFont(undefined, "normal");
@@ -77,21 +93,22 @@ async function exportToPDF(rows, total, company, fy) {
 
   const head = [
     [
-      ...LEAD.map((h) => ({ content: h, rowSpan: 2, styles: { valign: "middle" } })),
-      ...units.map((g) => ({ content: g, colSpan: 3, styles: { halign: "center" } })),
+      ...LEAD.map((h) => ({ content: h, rowSpan: 3, styles: { valign: "middle" } })),
+      ...sections.map((s) => ({ content: s, colSpan: WORK_TYPES.length * 3, styles: { halign: "center" } })),
     ],
-    [...units.flatMap(() => SUB)],
+    sections.flatMap(() => WORK_TYPES.map((w) => ({ content: w, colSpan: 3, styles: { halign: "center" } }))),
+    sections.flatMap(() => WORK_TYPES.flatMap(() => SUB)),
   ];
   autoTable(doc, {
     head,
-    body: rows.map((r) => cells(r, units).map(String)),
-    foot: [cells(total, units).map(String)],
+    body: rows.map((r) => cells(r, sections).map(String)),
+    foot: [cells(total, sections).map(String)],
     startY: 72,
-    margin: { left: 30, right: 30 },
+    margin: { left: 24, right: 24 },
     theme: "grid",
     styles: {
-      fontSize: 6.5,
-      cellPadding: 2.5,
+      fontSize: sections.length > 1 ? 5 : 6.5,
+      cellPadding: 2,
       valign: "middle",
       lineColor: [0, 0, 0],
       lineWidth: 0.5,
@@ -102,7 +119,7 @@ async function exportToPDF(rows, total, company, fy) {
     footStyles: { fillColor: false, textColor: 20, fontStyle: "bold", lineWidth: 0.5 },
     alternateRowStyles: { fillColor: false },
     columnStyles: Object.fromEntries(
-      Array.from({ length: LEAD.length + units.length * 3 - 1 }, (_, i) => [
+      Array.from({ length: LEAD.length + sections.length * WORK_TYPES.length * 3 - 1 }, (_, i) => [
         i + 1,
         { halign: "right" },
       ])
@@ -147,6 +164,8 @@ export default function AveragePriceReport() {
     );
   }, [allData, group, workType, fy]);
 
+  const sections = sectionsFor(group);
+
   const visibleRows = useMemo(
     () => (report ? filterAveragePriceRows(report.rows, { search }) : []),
     [report, search]
@@ -185,7 +204,7 @@ export default function AveragePriceReport() {
         />
         <div className="avgp-actions">
           <button
-            onClick={() => exportToExcel(visibleRows, total)}
+            onClick={() => exportToExcel(visibleRows, total, group)}
             className="avgp-export-btn"
             disabled={!report || loading}
             title="Export to Excel"
@@ -243,23 +262,34 @@ export default function AveragePriceReport() {
           <table className="ledger-table avgp-table">
             <thead>
               <tr>
-                <th rowSpan={2}>PO No.</th>
-                <th rowSpan={2} className="text-right">Weight (MT)</th>
-                <th rowSpan={2} className="text-right">Rate (₹/MT)</th>
-                <th rowSpan={2} className="text-right">Basic</th>
-                {PO_GROUPS.map((g) => (
-                  <th key={g} colSpan={3} className="avgp-group">
-                    {g}
+                <th rowSpan={3}>PO No.</th>
+                <th rowSpan={3} className="text-right">Weight (MT)</th>
+                <th rowSpan={3} className="text-right">Rate (₹/MT)</th>
+                <th rowSpan={3} className="text-right">Basic</th>
+                {sections.map((s) => (
+                  <th key={s} colSpan={WORK_TYPES.length * 3} className="avgp-group">
+                    {s}
                   </th>
                 ))}
               </tr>
               <tr>
-                {PO_GROUPS.flatMap((g) =>
-                  SUB.map((h, i) => (
-                    <th key={`${g}-${h}`} className={`text-right${i === 0 ? " avgp-sep" : ""}`}>
-                      {h}
+                {sections.flatMap((s) =>
+                  WORK_TYPES.map((w) => (
+                    <th key={`${s}-${w}`} colSpan={3} className="avgp-group avgp-sep">
+                      {w}
                     </th>
                   ))
+                )}
+              </tr>
+              <tr>
+                {sections.flatMap((s) =>
+                  WORK_TYPES.flatMap((w) =>
+                    SUB.map((h, i) => (
+                      <th key={`${s}-${w}-${h}`} className={`text-right${i === 0 ? " avgp-sep" : ""}`}>
+                        {h}
+                      </th>
+                    ))
+                  )
                 )}
               </tr>
             </thead>
@@ -270,18 +300,9 @@ export default function AveragePriceReport() {
                   <td className="text-right tabular">{fmtNum(r.weightMT)}</td>
                   <td className="text-right tabular">{fmtNum(r.rate)}</td>
                   <td className="text-right tabular">{fmtNum(r.basic)}</td>
-                  {PO_GROUPS.map((g) => {
-                    const b = r.buckets[g];
-                    return (
-                      <FragmentCells key={g}>
-                        <td className="text-right tabular avgp-sep">{fmtNum(b.mt)}</td>
-                        <td className="text-right tabular">{fmtNum(b.value)}</td>
-                        <td className="text-right tabular">
-                          {b.mt > 0 ? fmtNum(bucketRate(b)) : "-"}
-                        </td>
-                      </FragmentCells>
-                    );
-                  })}
+                  {sections.flatMap((s) =>
+                    WORK_TYPES.map((w) => <CellTriple key={`${s}-${w}`} b={r.cells[s][w]} />)
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -291,18 +312,9 @@ export default function AveragePriceReport() {
                 <td className="text-right tabular">{fmtNum(total.weightMT)}</td>
                 <td className="text-right tabular">{fmtNum(total.rate)}</td>
                 <td className="text-right tabular">{fmtINR(total.basic)}</td>
-                {PO_GROUPS.map((g) => {
-                  const b = total.buckets[g];
-                  return (
-                    <FragmentCells key={g}>
-                      <td className="text-right tabular avgp-sep">{fmtNum(b.mt)}</td>
-                      <td className="text-right tabular">{fmtINR(b.value)}</td>
-                      <td className="text-right tabular">
-                        {b.mt > 0 ? fmtNum(bucketRate(b)) : "-"}
-                      </td>
-                    </FragmentCells>
-                  );
-                })}
+                {sections.flatMap((s) =>
+                  WORK_TYPES.map((w) => <CellTriple key={`${s}-${w}`} b={total.cells[s][w]} money />)
+                )}
               </tr>
             </tfoot>
           </table>
@@ -320,7 +332,14 @@ export default function AveragePriceReport() {
   );
 }
 
-// Tiny helper so each group's three <td>s can sit under one keyed element.
-function FragmentCells({ children }) {
-  return <>{children}</>;
+// MT / Rate / Value cells for one work type under one company block.
+function CellTriple({ b, money }) {
+  const has = b.mt > 0;
+  return (
+    <>
+      <td className="text-right tabular avgp-sep">{has ? fmtNum(b.mt) : "-"}</td>
+      <td className="text-right tabular">{has ? fmtNum(bucketRate(b)) : "-"}</td>
+      <td className="text-right tabular">{has ? (money ? fmtINR(b.value) : fmtNum(b.value)) : "-"}</td>
+    </>
+  );
 }

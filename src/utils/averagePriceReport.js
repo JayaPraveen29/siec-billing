@@ -1,4 +1,6 @@
 // Average Price Report engine.
+// Table: SIEC | ST | Total, each split into STRL | CT | SCRAP, each with
+// MT / Rate / Value (see `cells`).
 // One row per PO (all of the PO's items rolled together; `section` holds the
 // PO number). Everything is based on what was ORDERED - no invoice values:
 //   Weight / Rate / Basic  -> sum of item weights, PO rate in Rs/MT, and
@@ -7,7 +9,7 @@
 //                             company group the PO belongs to
 //   Totals                 -> Total MT, Total Basic, Avg Rate (= Basic / MT)
 
-import { PO_GROUPS } from "./groups";
+import { PO_GROUPS, WORK_TYPES } from "./groups";
 import { inFinancialYear } from "./financialYear";
 import { CT_TUB_WEIGHT_KG, ctItemNumbers } from "./ledger";
 
@@ -17,6 +19,15 @@ function num(v) {
 }
 
 const emptyBucket = () => ({ mt: 0, value: 0 });
+
+// Top-level blocks of the table: each company, then the overall Total.
+export const SECTIONS = [...PO_GROUPS, "Total"];
+
+// cells[section][workType] = { mt, value }
+const emptyCells = () =>
+  Object.fromEntries(
+    SECTIONS.map((s) => [s, Object.fromEntries(WORK_TYPES.map((w) => [w, emptyBucket()]))])
+  );
 
 /**
  * @param {Array} poSheets - [{ po, items, invoices }]
@@ -37,18 +48,16 @@ export function computeAveragePriceReport(poSheets, { fy = "all" } = {}) {
     // Coal Tub POs are priced per tub (Nos.), not per kg:
     //   KG price = unit rate / 586      qty kg = PO qty (Nos.) x 586
     const unitRate = isCT ? num(po.unitRate) / CT_TUB_WEIGHT_KG : num(po.unitRate);
-    const bucketKey = PO_GROUPS.includes(po.group) ? po.group : "other";
 
     // One row per PO: every item of the PO is rolled into that PO's row.
-    const buckets = { other: emptyBucket() };
-    PO_GROUPS.forEach((g) => (buckets[g] = emptyBucket()));
+    const cells = emptyCells();
     const row = {
       poId: po.id,
       groupRank: PO_GROUPS.includes(po.group) ? PO_GROUPS.indexOf(po.group) : PO_GROUPS.length,
       section: String(po.poNumber || po.code || po.id).trim(),
       weightMT: 0,
       basic: 0,
-      buckets,
+      cells,
     };
 
     (items || []).forEach((item) => {
@@ -57,9 +66,16 @@ export function computeAveragePriceReport(poSheets, { fy = "all" } = {}) {
       row.basic += ordered * unitRate; // ordered kg x rate per kg (CT: unit rate / 586)
     });
 
-    // Ordered MT / Basic go under the PO's own group (SIEC or ST).
-    row.buckets[bucketKey].mt = row.weightMT;
-    row.buckets[bucketKey].value = row.basic;
+    // Ordered MT / Basic go under the PO's company (SIEC / ST) and work type
+    // (STRL / CT / SCRAP), and always into the overall Total block.
+    if (WORK_TYPES.includes(po.workType)) {
+      const targets = ["Total"];
+      if (PO_GROUPS.includes(po.group)) targets.push(po.group);
+      targets.forEach((t) => {
+        row.cells[t][po.workType].mt += row.weightMT;
+        row.cells[t][po.workType].value += row.basic;
+      });
+    }
 
     map.set(po.id, row);
   });
@@ -78,43 +94,34 @@ export function computeAveragePriceReport(poSheets, { fy = "all" } = {}) {
 }
 
 function finish(r) {
-  const out = {
+  return {
     poId: r.poId,
     groupRank: r.groupRank,
     section: r.section,
     weightMT: r.weightMT,
     basic: r.basic,
     rate: r.weightMT > 0 ? r.basic / r.weightMT : 0, // Rs / MT
-    buckets: r.buckets,
+    cells: r.cells,
   };
-  let mt = 0;
-  let value = 0;
-  Object.values(r.buckets).forEach((b) => {
-    mt += b.mt;
-    value += b.value;
-  });
-  out.totalMT = mt;
-  out.totalValue = value;
-  out.avgRate = mt > 0 ? value / mt : 0;
-  return out;
 }
 
 /** Sum a list of rows (used for the Grand Total of whatever is visible). */
 export function sumAveragePriceRows(rows) {
-  const acc = { section: "Grand Total", weightMT: 0, basic: 0, buckets: { other: emptyBucket() } };
-  PO_GROUPS.forEach((g) => (acc.buckets[g] = emptyBucket()));
+  const acc = { section: "Grand Total", weightMT: 0, basic: 0, cells: emptyCells() };
   rows.forEach((r) => {
     acc.weightMT += r.weightMT;
     acc.basic += r.basic;
-    Object.keys(acc.buckets).forEach((k) => {
-      acc.buckets[k].mt += r.buckets[k].mt;
-      acc.buckets[k].value += r.buckets[k].value;
-    });
+    SECTIONS.forEach((s) =>
+      WORK_TYPES.forEach((w) => {
+        acc.cells[s][w].mt += r.cells[s][w].mt;
+        acc.cells[s][w].value += r.cells[s][w].value;
+      })
+    );
   });
   return finish(acc);
 }
 
-/** Bucket rate = value / MT (blank when nothing billed). */
+/** Rate = value / MT (Rs/MT). */
 export const bucketRate = (b) => (b.mt > 0 ? b.value / b.mt : 0);
 
 export function filterAveragePriceRows(rows, { search }) {
