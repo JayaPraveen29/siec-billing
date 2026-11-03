@@ -28,12 +28,12 @@ const SUB = ["MT", "Rate", "Value"];
 // A company selected -> only that company; no company -> only the overall Total.
 const sectionsFor = (company) => (PO_GROUPS.includes(company) ? [company] : ["Total"]);
 
-function cells(r, sections, empty = "") {
+function cells(r, sections, empty = "", wts = WORK_TYPES) {
   const out = [r.section];
   sections.forEach((s) =>
-    WORK_TYPES.forEach((w) => {
+    wts.forEach((w) => {
       const b = r.cells[s][w];
-      out.push(b.mt > 0 ? fmtNum(b.mt) : empty, b.mt > 0 ? fmtNum(bucketRate(b)) : empty, b.mt > 0 ? fmtNum(b.value) : empty);
+      out.push(b.mt > 0 ? fmtNum(b.mt) : empty, b.mt > 0 ? fmtNum(bucketRate(b) / 1000) : empty, b.mt > 0 ? fmtNum(b.value / 100000) : empty);
     })
   );
   return out;
@@ -79,8 +79,12 @@ function exportToExcel(rows, total, company) {
   XLSX.writeFile(wb, `Average-Price-Report-${stamp()}.xlsx`);
 }
 
-async function exportToPDF(rows, total, company, fy) {
+async function exportToPDF(allRows, total, company, fy) {
   const sections = sectionsFor(company);
+  // Leave out what is empty: work types with no figures in the shown block(s),
+  // and POs that have nothing in any shown column.
+  const wts = WORK_TYPES.filter((w) => sections.some((s) => total.cells[s][w].mt > 0));
+  const rows = allRows.filter((r) => sections.some((s) => wts.some((w) => r.cells[s][w].mt > 0)));
   const { default: jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
@@ -94,21 +98,22 @@ async function exportToPDF(rows, total, company, fy) {
   const head = [
     [
       ...LEAD.map((h) => ({ content: h, rowSpan: 3, styles: { valign: "middle" } })),
-      ...sections.map((s) => ({ content: s, colSpan: WORK_TYPES.length * 3, styles: { halign: "center" } })),
+      ...sections.map((s) => ({ content: s, colSpan: wts.length * 3, styles: { halign: "center" } })),
     ],
-    sections.flatMap(() => WORK_TYPES.map((w) => ({ content: w, colSpan: 3, styles: { halign: "center" } }))),
-    sections.flatMap(() => WORK_TYPES.flatMap(() => SUB)),
+    sections.flatMap(() => wts.map((w) => ({ content: w, colSpan: 3, styles: { halign: "center" } }))),
+    sections.flatMap(() => wts.flatMap(() => SUB)),
   ];
   autoTable(doc, {
     head,
-    body: rows.map((r) => cells(r, sections, "").map(String)),
-    foot: [cells(total, sections, "").map(String)],
+    body: rows.map((r) => cells(r, sections, "", wts).map(String)),
+    foot: [cells(total, sections, "", wts).map(String)],
     startY: 72,
     margin: { left: 24, right: 24 },
+    tableWidth: "wrap", // columns shrink to their content
     theme: "grid",
     styles: {
       fontSize: 6.5,
-      cellPadding: 2,
+      cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
       valign: "middle",
       lineColor: [0, 0, 0],
       lineWidth: 0.5,
@@ -119,7 +124,7 @@ async function exportToPDF(rows, total, company, fy) {
     footStyles: { fillColor: false, textColor: 20, fontStyle: "bold", lineWidth: 0.5 },
     alternateRowStyles: { fillColor: false },
     columnStyles: Object.fromEntries(
-      Array.from({ length: LEAD.length + sections.length * WORK_TYPES.length * 3 - 1 }, (_, i) => [
+      Array.from({ length: LEAD.length + sections.length * wts.length * 3 - 1 }, (_, i) => [
         i + 1,
         { halign: "right" },
       ])
@@ -304,7 +309,7 @@ export default function AveragePriceReport() {
               <tr>
                 <td>Grand Total</td>
                 {sections.flatMap((s) =>
-                  WORK_TYPES.map((w) => <CellTriple key={`${s}-${w}`} b={total.cells[s][w]} money />)
+                  WORK_TYPES.map((w) => <CellTriple key={`${s}-${w}`} b={total.cells[s][w]} />)
                 )}
               </tr>
             </tfoot>
@@ -324,13 +329,13 @@ export default function AveragePriceReport() {
 }
 
 // MT / Rate / Value cells for one work type under one company block.
-function CellTriple({ b, money }) {
+function CellTriple({ b }) {
   const has = b.mt > 0;
   return (
     <>
       <td className="text-right tabular avgp-sep">{has ? fmtNum(b.mt) : ""}</td>
-      <td className="text-right tabular">{has ? fmtNum(bucketRate(b)) : ""}</td>
-      <td className="text-right tabular">{has ? (money ? fmtINR(b.value) : fmtNum(b.value)) : ""}</td>
+      <td className="text-right tabular">{has ? fmtNum(bucketRate(b) / 1000) : ""}</td>
+      <td className="text-right tabular">{has ? fmtNum(b.value / 10000) : ""}</td>
     </>
   );
 }
