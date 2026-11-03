@@ -23,7 +23,7 @@ import "./AveragePriceReport.css";
 // With a company selected only that company's block is shown.
 // ---------------------------------------------------------------------------
 const LEAD = ["PO No."];
-const SUB = ["MT", "Rate", "Value"];
+const SUB = ["MT", "Rate", "Lacs"];
 
 // A company selected -> only that company; no company -> only the overall Total.
 const sectionsFor = (company) => (PO_GROUPS.includes(company) ? [company] : ["Total"]);
@@ -335,7 +335,7 @@ function CellTriple({ b }) {
     <>
       <td className="text-right tabular avgp-sep">{has ? fmtNum(b.mt) : ""}</td>
       <td className="text-right tabular">{has ? fmtNum(bucketRate(b) / 1000) : ""}</td>
-      <td className="text-right tabular">{has ? fmtNum(b.value / 10000) : ""}</td>
+      <td className="text-right tabular">{has ? fmtNum(b.value / 100000) : ""}</td>
     </>
   );
 }
