@@ -60,6 +60,12 @@
   transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
 }
 
+/* Icons keep their size: a long label (e.g. "PM Wise Pending Payments") used to
+   squeeze the icon down to nothing in the flex row. */
+.sidebar-link svg {
+  flex-shrink: 0;
+}
+
 .sidebar-link:hover {
   color: var(--color-paper);
   background: var(--color-plate2);
@@ -103,6 +109,7 @@
 .sidebar-sublink {
   padding-left: 1rem;
   font-size: 0.8125rem;
+  white-space: normal; /* a long label wraps instead of crushing its icon */
 }
 
 /* Desktop: vertical fixed-width sidebar */

@@ -9,13 +9,32 @@ import {
   CalendarRange,
   Receipt,
   Hourglass,
-  Users,
   Landmark,
   ListTree,
   Scale,
   ChevronDown,
 } from "lucide-react";
 import "./Sidebar.css";
+
+// Single-person icon drawn inline (no dependency on the lucide version).
+function PersonIcon({ size = 15 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
 
 const REPORT_PATHS = [
   "/abs",
@@ -142,7 +161,7 @@ export default function Sidebar() {
                 `sidebar-link sidebar-sublink${isActive ? " active" : ""}`
               }
             >
-              <Users size={15} />
+              <PersonIcon size={15} />
               PM Wise Pending Payments
             </NavLink>
             <NavLink
