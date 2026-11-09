@@ -71,6 +71,10 @@ function buildColumns({ showArea, qtyCols, ctMode }) {
       right: true,
     })
   );
+  cols.push(
+    { h: "Basic", v: (r) => fmtNum(r.basic, 2), t: (g) => fmtNum(g.basic, 2), w: 13, right: true },
+    { h: "GST", v: (r) => fmtNum(r.gst, 2), t: (g) => fmtNum(g.gst, 2), w: 12, right: true }
+  );
   cols.push({ h: "Gross Value", v: (r) => fmtNum(r.grossValue, 2), t: (g) => fmtNum(g.grossValue, 2), w: 13, right: true });
   // Mat. Adv. is dropped only when Work Type = CT; GST TDS is always shown.
   if (!ctMode) {
@@ -308,6 +312,8 @@ export default function BillWiseReport() {
                 {qtyCols.map((c) => (
                   <th key={c.key} className="text-right">{c.label}</th>
                 ))}
+                <th className="text-right">Basic</th>
+                <th className="text-right">GST</th>
                 <th className="text-right">Gross Value</th>
                 {!ctMode && <th className="text-right">Mat. Adv.</th>}
                 <th className="text-right">GST TDS</th>
@@ -334,6 +340,8 @@ export default function BillWiseReport() {
                       {r[c.key] > 0 ? fmtNum(r[c.key], c.type === "CT" ? 0 : 1) : "-"}
                     </td>
                   ))}
+                  <td className="text-right tabular">{fmtNum(r.basic, 2)}</td>
+                  <td className="text-right tabular">{fmtNum(r.gst, 2)}</td>
                   <td className="text-right tabular" style={{ fontWeight: 600 }}>
                     {fmtNum(r.grossValue, 2)}
                   </td>
@@ -366,6 +374,8 @@ export default function BillWiseReport() {
                     {fmtNum(report.grandTotal[c.key], c.type === "CT" ? 0 : 1)}
                   </td>
                 ))}
+                <td className="text-right tabular">{fmtINR(report.grandTotal.basic)}</td>
+                <td className="text-right tabular">{fmtINR(report.grandTotal.gst)}</td>
                 <td className="text-right tabular">{fmtINR(report.grandTotal.grossValue)}</td>
                 {!ctMode && (
                   <td className="text-right tabular">{fmtINR(report.grandTotal.matAdvance)}</td>
