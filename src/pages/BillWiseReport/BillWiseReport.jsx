@@ -72,12 +72,12 @@ function buildColumns({ showArea, qtyCols, ctMode }) {
     })
   );
   cols.push({ h: "Gross Value", v: (r) => fmtNum(r.grossValue, 2), t: (g) => fmtNum(g.grossValue, 2), w: 13, right: true });
-  if (ctMode) {
-    cols.push({ h: "GST TDS", v: (r) => fmtNum(r.gstTds, 0), t: (g) => fmtNum(g.gstTds, 0), w: 11, right: true });
-  } else {
+  // Mat. Adv. is dropped only when Work Type = CT; GST TDS is always shown.
+  if (!ctMode) {
     cols.push({ h: "Mat. Adv.", v: (r) => fmtNum(r.matAdvance, 0), t: (g) => fmtNum(g.matAdvance, 0), w: 11, right: true });
   }
   cols.push(
+    { h: "GST TDS", v: (r) => fmtNum(r.gstTds, 0), t: (g) => fmtNum(g.gstTds, 0), w: 11, right: true },
     { h: "TDS", v: (r) => fmtNum(r.tds, 0), t: (g) => fmtNum(g.tds, 0), w: 10, right: true },
     { h: "Net Recv.", v: (r) => fmtNum(r.netReceivable, 0), t: (g) => fmtNum(g.netReceivable, 0), w: 13, right: true },
     { h: "Payment Date", v: (r) => (r.paymentDate ? fmtDate(r.paymentDate) : "-"), w: 13 },
@@ -171,7 +171,7 @@ export default function BillWiseReport() {
     return withGstTds(computeBillWiseReport(sheets), sheets);
   }, [allData, group, workType]);
 
-  // Work Type = CT: GST TDS column instead of Mat. Adv.
+  // Work Type = CT: Mat. Adv. column is hidden (GST TDS is always shown).
   const ctMode = workType === "CT";
   const showArea = billWiseShowArea(workType);
   const qtyCols = billWiseQtyColumns(workType);
@@ -309,11 +309,8 @@ export default function BillWiseReport() {
                   <th key={c.key} className="text-right">{c.label}</th>
                 ))}
                 <th className="text-right">Gross Value</th>
-                {ctMode ? (
-                  <th className="text-right">GST TDS</th>
-                ) : (
-                  <th className="text-right">Mat. Adv.</th>
-                )}
+                {!ctMode && <th className="text-right">Mat. Adv.</th>}
+                <th className="text-right">GST TDS</th>
                 <th className="text-right">TDS</th>
                 <th className="text-right">Net Recv.</th>
                 <th>Payment Date</th>
@@ -340,9 +337,8 @@ export default function BillWiseReport() {
                   <td className="text-right tabular" style={{ fontWeight: 600 }}>
                     {fmtNum(r.grossValue, 2)}
                   </td>
-                  <td className="text-right tabular">
-                    {fmtNum(ctMode ? r.gstTds : r.matAdvance, 0)}
-                  </td>
+                  {!ctMode && <td className="text-right tabular">{fmtNum(r.matAdvance, 0)}</td>}
+                  <td className="text-right tabular">{fmtNum(r.gstTds, 0)}</td>
                   <td className="text-right tabular">{fmtNum(r.tds, 0)}</td>
                   <td className="text-right tabular text-rivet2">
                     {fmtNum(r.netReceivable, 0)}
@@ -371,9 +367,10 @@ export default function BillWiseReport() {
                   </td>
                 ))}
                 <td className="text-right tabular">{fmtINR(report.grandTotal.grossValue)}</td>
-                <td className="text-right tabular">
-                  {fmtINR(ctMode ? report.grandTotal.gstTds : report.grandTotal.matAdvance)}
-                </td>
+                {!ctMode && (
+                  <td className="text-right tabular">{fmtINR(report.grandTotal.matAdvance)}</td>
+                )}
+                <td className="text-right tabular">{fmtINR(report.grandTotal.gstTds)}</td>
                 <td className="text-right tabular">{fmtINR(report.grandTotal.tds)}</td>
                 <td className="text-right tabular text-rivet2">
                   {fmtINR(report.grandTotal.netReceivable)}
