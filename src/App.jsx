@@ -9,6 +9,7 @@ import POItemWiseReport from "./pages/POItemWiseReport/POItemWiseReport";
 import BillWiseReport from "./pages/BillWiseReport/BillWiseReport";
 import PendingPayments from "./pages/PendingPayments/PendingPayments";
 import PMPendingPayments from "./pages/PMPendingPayments/PMPendingPayments";
+import MaterialAdvanceEntry from "./pages/MaterialAdvanceEntry/MaterialAdvanceEntry";
 import MaterialAdvanceReport from "./pages/MaterialAdvanceReport/MaterialAdvanceReport";
 import AveragePriceReport from "./pages/AveragePriceReport/AveragePriceReport";
 import DateWiseReport from "./pages/DateWiseReport/Datewisereport";
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/po/new" element={<POCreate />} />
           <Route path="/po/:id" element={<POSheet />} />
+          <Route path="/material-advance/entry" element={<MaterialAdvanceEntry />} />
           <Route path="/abs" element={<ABSReport />} />
           <Route path="/reports/po-wise" element={<POWiseReport />} />
           <Route path="/reports/po-item-wise" element={<POItemWiseReport />} />

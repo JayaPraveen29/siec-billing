@@ -12,6 +12,7 @@ import {
   Landmark,
   ListTree,
   Scale,
+  Banknote,
   ChevronDown,
 } from "lucide-react";
 import "./Sidebar.css";
@@ -82,6 +83,13 @@ export default function Sidebar() {
         >
           <FilePlus2 size={17} />
           PO Creation
+        </NavLink>
+        <NavLink
+          to="/material-advance/entry"
+          className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`}
+        >
+          <Banknote size={17} />
+          Material Advance Entry
         </NavLink>
         <button
           type="button"

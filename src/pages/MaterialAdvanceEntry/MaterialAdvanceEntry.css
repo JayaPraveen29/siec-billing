@@ -1,0 +1,90 @@
+.maentry-page {
+  padding: 2rem;
+  max-width: 70rem;
+  margin: 0 auto;
+}
+
+.maentry-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.maentry-refresh {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--color-line);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  background: transparent;
+  transition: border-color 0.15s ease;
+}
+
+.maentry-refresh:hover {
+  border-color: var(--color-rivet);
+}
+
+.maentry-form {
+  margin-top: 1.5rem;
+  padding: 1rem 1.25rem 1.25rem;
+  border: 1px solid var(--color-line);
+  background: var(--color-plate2);
+  border-radius: var(--radius-sm);
+}
+
+.maentry-form-title {
+  font-size: 0.9rem;
+  margin: 0 0 1rem;
+}
+
+.maentry-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 1rem;
+}
+
+.maentry-field {
+  display: block;
+  min-width: 0;
+}
+
+.maentry-field .input {
+  width: 100%;
+}
+
+.maentry-error {
+  color: var(--color-warn);
+  font-size: 0.875rem;
+  margin-top: 0.75rem;
+}
+
+.maentry-buttons {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.maentry-cancel {
+  border: 1px solid var(--color-line);
+  background: transparent;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+}
+
+.maentry-table-wrap {
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 767px) {
+  .maentry-page {
+    padding: 1rem;
+  }
+  .maentry-grid {
+    grid-template-columns: 1fr;
+  }
+}
