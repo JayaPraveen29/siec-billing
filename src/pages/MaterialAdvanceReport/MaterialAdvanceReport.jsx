@@ -18,7 +18,7 @@ import Loading from "../../components/Loading";
 import "./MaterialAdvanceReport.css";
 
 
-const exportHeaders = (advLabel) => ["PO", advLabel, "Adjusted", "Bala. Mat. Adv."];
+const exportHeaders = (advLabel) => ["S.No.", "PO", advLabel, "Adjusted", "Bala. Mat. Adv."];
 
 // Bala. Mat. Adv. = Material Advance (1st value column) - Adjusted (2nd).
 const balaMatAdv = (r) => (r.recovered || 0) - (r.balanceAdvance || 0);
@@ -30,8 +30,38 @@ function stamp() {
 // POs created with "NA" material advance show NA instead of numbers.
 const matCell = (r, value) => (r.matAdvNA ? "NA" : fmtNum(value, 0));
 
-function exportRow(r) {
+// Unit order on the report: SIEC first, then ST, then anything else.
+const UNIT_ORDER = ["SIEC", "ST"];
+const unitLabel = (g) => (g ? String(g) : "OTHER");
+
+/**
+ * Turns the flat PO rows into display items: a unit heading ("SIEC", "ST")
+ * printed ONCE per unit, followed by that unit's POs. Serial numbers restart
+ * from 1 inside every unit. Rows keep their existing order within a unit.
+ */
+function buildDisplayItems(rows) {
+  const buckets = new Map();
+  rows.forEach((r) => {
+    const key = unitLabel(r.group);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(r);
+  });
+  const keys = [...buckets.keys()].sort((a, b) => {
+    const ia = UNIT_ORDER.indexOf(a);
+    const ib = UNIT_ORDER.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b);
+  });
+  const items = [];
+  keys.forEach((k) => {
+    items.push({ type: "unit", name: k });
+    buckets.get(k).forEach((r, i) => items.push({ type: "row", sn: i + 1, row: r }));
+  });
+  return items;
+}
+
+function exportRow(sn, r) {
   return [
+    sn,
     r.poCode,
     matCell(r, r.recovered),
     matCell(r, r.balanceAdvance),
@@ -41,6 +71,7 @@ function exportRow(r) {
 
 function exportTotal(t) {
   return [
+    "",
     "Grand Total",
     fmtNum(t.recovered, 0),
     fmtNum(t.balanceAdvance, 0),
@@ -48,39 +79,89 @@ function exportTotal(t) {
   ];
 }
 
-function exportToExcel(totals, rows, advLabel) {
-  const ws = XLSX.utils.aoa_to_sheet([
-    exportHeaders(advLabel),
-    ...rows.map(exportRow),
-    exportTotal(totals),
-  ]);
-  ws["!cols"] = [{ wch: 16 }, { wch: 26 }, { wch: 16 }, { wch: 18 }];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Material Advance");
-  XLSX.writeFile(wb, `Material-Advance-Report-${stamp()}.xlsx`);
+// SheetJS (community) cannot write page setup, so patch the sheet XML to make
+// the printout A4 portrait, fitted to one page wide.
+async function makePortrait(wb) {
+  const { default: JSZip } = await import("jszip");
+  const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const zip = await JSZip.loadAsync(buf);
+  const path = "xl/worksheets/sheet1.xml";
+  let xml = await zip.file(path).async("string");
+  xml = xml
+    .replace(/<worksheet([^>]*)>/, '<worksheet$1><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>')
+    .replace(
+      /(<pageMargins[^>]*\/>)/,
+      '$1<pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="0"/>'
+    );
+  zip.file(path, xml);
+  return zip.generateAsync({
+    type: "blob",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
 }
 
-async function exportToPDF(totals, rows, advLabel, company) {
+async function exportToExcel(totals, items, rowCount, advLabel) {
+  const aoa = [exportHeaders(advLabel)];
+  const unitRows = [];
+  items.forEach((it) => {
+    if (it.type === "unit") {
+      unitRows.push(aoa.length);
+      aoa.push([it.name, "", "", "", ""]);
+    } else {
+      aoa.push(exportRow(it.sn, it.row));
+    }
+  });
+  aoa.push(exportTotal(totals));
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [{ wch: 7 }, { wch: 16 }, { wch: 22 }, { wch: 14 }, { wch: 16 }];
+  // Unit heading spans the whole row.
+  ws["!merges"] = unitRows.map((r) => ({ s: { r, c: 0 }, e: { r, c: 4 } }));
+  ws["!margins"] = { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 };
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Material Advance");
+
+  const blob = await makePortrait(wb);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `Material-Advance-Report-${stamp()}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+async function exportToPDF(totals, items, rowCount, advLabel, company) {
   const { default: jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
-  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
   drawPdfCompany(doc, company);
   doc.setFontSize(11);
   doc.setFont(undefined, "normal");
   doc.text("Material Advance Report", 40, 40);
   doc.setFontSize(9);
-  doc.text(`POs: ${rows.length}`, 40, 58);
+  doc.text(`POs: ${rowCount}`, 40, 58);
+
+  const body = items.map((it) =>
+    it.type === "unit"
+      ? [{ content: it.name, colSpan: 5, styles: { fontStyle: "bold", halign: "left" } }]
+      : exportRow(it.sn, it.row).map((v) => String(v))
+  );
+
   autoTable(doc, {
     head: [exportHeaders(advLabel)],
-    body: rows.map((r) => exportRow(r).map((v) => String(v))),
+    body,
     foot: [exportTotal(totals)],
     startY: 72,
     margin: { left: 40, right: 40 },
+    tableWidth: "wrap",
     theme: "grid",
     styles: {
       fontSize: 8,
       cellPadding: 3,
       valign: "middle",
+      cellWidth: "wrap",
+      overflow: "visible",
       lineColor: [0, 0, 0],
       lineWidth: 0.5,
       fillColor: false,
@@ -90,9 +171,11 @@ async function exportToPDF(totals, rows, advLabel, company) {
     footStyles: { fillColor: false, textColor: 20, fontStyle: "normal", lineWidth: 0.5 },
     alternateRowStyles: { fillColor: false },
     columnStyles: {
-      1: { halign: "right" },
+      0: { halign: "center" },
+      1: { halign: "left" },
       2: { halign: "right" },
       3: { halign: "right" },
+      4: { halign: "right" },
     },
   });
   doc.save(`Material-Advance-Report-${stamp()}.pdf`);
@@ -212,6 +295,9 @@ export default function MaterialAdvanceReport() {
     return filterMaterialAdvanceRows(report.rows, { search, status });
   }, [report, search, status]);
 
+  // Rows grouped under a unit heading (SIEC once, then ST once).
+  const displayItems = useMemo(() => buildDisplayItems(visibleRows), [visibleRows]);
+
   // Column heading.
   const advLabel = "Material Advance";
 
@@ -220,14 +306,14 @@ export default function MaterialAdvanceReport() {
 
   function handleExportExcel() {
     if (!report) return;
-    exportToExcel(totals, visibleRows, advLabel);
+    exportToExcel(totals, displayItems, visibleRows.length, advLabel);
   }
 
   async function handleExportPdf() {
     if (!report) return;
     setExportingPdf(true);
     try {
-      await exportToPDF(totals, visibleRows, advLabel, group);
+      await exportToPDF(totals, displayItems, visibleRows.length, advLabel, group);
     } finally {
       setExportingPdf(false);
     }
@@ -310,6 +396,7 @@ export default function MaterialAdvanceReport() {
           <table className="ledger-table">
             <thead>
               <tr>
+                <th style={{ width: "3.5rem" }}>S.No.</th>
                 <th>PO</th>
                 <th className="text-right">{advLabel}</th>
                 <th className="text-right">Adjusted</th>
@@ -317,12 +404,23 @@ export default function MaterialAdvanceReport() {
               </tr>
             </thead>
             <tbody>
-              {visibleRows.map((r) => (
+              {displayItems.map((it) =>
+                it.type === "unit" ? (
+                  <tr key={`unit-${it.name}`} className="matadv-unit-row">
+                    <td colSpan={5} style={{ fontWeight: 700 }}>
+                      {it.name}
+                    </td>
+                  </tr>
+                ) : (
+                  (() => {
+                    const r = it.row;
+                    return (
                 <tr
                   key={r.poId}
                   className="matadv-row"
                   onClick={() => navigate(`/po/${r.poId}`)}
                 >
+                  <td className="tabular">{it.sn}</td>
                   <td className="text-rivet">{r.poCode}</td>
                   <td className="text-right tabular">{matCell(r, r.recovered)}</td>
                   <td className="text-right tabular" style={{ fontWeight: 600 }}>
@@ -337,10 +435,14 @@ export default function MaterialAdvanceReport() {
                     {matCell(r, balaMatAdv(r))}
                   </td>
                 </tr>
-              ))}
+                    );
+                  })()
+                )
+              )}
             </tbody>
             <tfoot>
               <tr>
+                <td></td>
                 <td>Grand Total</td>
                 <td className="text-right tabular">{fmtINR(totals.recovered)}</td>
                 <td className="text-right tabular">{fmtINR(totals.balanceAdvance)}</td>
