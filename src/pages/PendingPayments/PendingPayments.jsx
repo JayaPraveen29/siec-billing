@@ -102,6 +102,7 @@ function groupByUnit(poGroups) {
 // Exports (kept in this file so only one file needs to change)
 // ---------------------------------------------------------------------------
 const EXPORT_HEADERS = [
+  "S.No.",
   "Bill No.",
   "Bill Date",
   "Net Recv.",
@@ -109,19 +110,40 @@ const EXPORT_HEADERS = [
   "Balance",
   "Days Due",
 ];
+const EXPORT_COLS = EXPORT_HEADERS.length;
+const TOTAL_LABEL_SPAN = 3; // "Total" label spans S.No. + Bill No. + Bill Date
 
 // Flatten units into table rows tagged by kind:
-// "po" | "bill" | "total" | "unitTotal" | "grand".
+// "po" | "head" | "bill" | "total" | "unitTotal" | "grand".
+// Every PO block starts with its merged PO line, then the column headings,
+// then its bills and its total.
+// `span` = how many columns the first cell is merged across (PO heading = the
+// whole row, total labels = the first three columns).
 function buildExportRows(units, grand) {
   const out = [];
-  const empty = ["", "", "", "", ""];
+  const totalCells = (label, t) => [
+    label,
+    "",
+    "",
+    fmtNum(t.netReceivable, 0),
+    fmtNum(t.paymentReceived, 0),
+    fmtNum(t.balanceToReceive, 0),
+    "",
+  ];
   units.forEach((u) => {
     u.pos.forEach((g) => {
-      out.push({ kind: "po", cells: [poHeading(g), ...empty] });
-      g.bills.forEach((b) =>
+      out.push({
+        kind: "po",
+        span: EXPORT_COLS,
+        cells: [poHeading(g), ...Array(EXPORT_COLS - 1).fill("")],
+      });
+      out.push({ kind: "head", span: 1, cells: EXPORT_HEADERS });
+      g.bills.forEach((b, i) =>
         out.push({
           kind: "bill",
+          span: 1,
           cells: [
+            i + 1,
             b.billNo,
             fmtDate(b.billDate),
             fmtNum(b.netReceivable, 0),
@@ -131,43 +153,17 @@ function buildExportRows(units, grand) {
           ],
         })
       );
-      out.push({
-        kind: "total",
-        cells: [
-          "Total",
-          "",
-          fmtNum(g.total.netReceivable, 0),
-          fmtNum(g.total.paymentReceived, 0),
-          fmtNum(g.total.balanceToReceive, 0),
-          "",
-        ],
-      });
+      out.push({ kind: "total", span: TOTAL_LABEL_SPAN, cells: totalCells("Total", g.total) });
     });
     if (units.length > 1) {
       out.push({
         kind: "unitTotal",
-        cells: [
-          `Total — ${unitLabel(u.unit)}`,
-          "",
-          fmtNum(u.total.netReceivable, 0),
-          fmtNum(u.total.paymentReceived, 0),
-          fmtNum(u.total.balanceToReceive, 0),
-          "",
-        ],
+        span: TOTAL_LABEL_SPAN,
+        cells: totalCells(`Total — ${unitLabel(u.unit)}`, u.total),
       });
     }
   });
-  out.push({
-    kind: "grand",
-    cells: [
-      "Grand Total",
-      "",
-      fmtNum(grand.netReceivable, 0),
-      fmtNum(grand.paymentReceived, 0),
-      fmtNum(grand.balanceToReceive, 0),
-      "",
-    ],
-  });
+  out.push({ kind: "grand", span: TOTAL_LABEL_SPAN, cells: totalCells("Grand Total", grand) });
   return out;
 }
 
@@ -177,8 +173,9 @@ function stamp() {
 
 function exportToExcel(units, grand) {
   const rows = buildExportRows(units, grand);
-  const ws = XLSX.utils.aoa_to_sheet([EXPORT_HEADERS, ...rows.map((r) => r.cells)]);
+  const ws = XLSX.utils.aoa_to_sheet(rows.map((r) => r.cells));
   ws["!cols"] = [
+    { wch: 7 },
     { wch: 18 },
     { wch: 14 },
     { wch: 13 },
@@ -186,6 +183,11 @@ function exportToExcel(units, grand) {
     { wch: 12 },
     { wch: 10 },
   ];
+  // Merge the PO heading across the whole row and the Total labels across
+  // their first three columns.
+  ws["!merges"] = rows
+    .map((r, i) => (r.span > 1 ? { s: { r: i, c: 0 }, e: { r: i, c: r.span - 1 } } : null))
+    .filter(Boolean);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Pending Payments");
   XLSX.writeFile(wb, `Pending-Payments-${stamp()}.xlsx`);
@@ -196,7 +198,7 @@ async function exportToPDF(units, grand, company) {
   const autoTable = (await import("jspdf-autotable")).default;
   const rows = buildExportRows(units, grand);
 
-  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
   drawPdfCompany(doc, company);
   doc.setFontSize(11);
   doc.setFont(undefined, "normal");
@@ -205,8 +207,15 @@ async function exportToPDF(units, grand, company) {
   doc.text(`POs: ${units.reduce((n, u) => n + u.pos.length, 0)}`, 40, 58);
 
   autoTable(doc, {
-    head: [EXPORT_HEADERS],
-    body: rows.map((r) => r.cells.map((v) => String(v))),
+    // Merged cells: the first cell carries a colSpan, the cells it covers are dropped.
+    body: rows.map((r) =>
+      r.span > 1
+        ? [
+            { content: String(r.cells[0]), colSpan: r.span },
+            ...r.cells.slice(r.span).map((v) => String(v)),
+          ]
+        : r.cells.map((v) => String(v))
+    ),
     startY: 72,
     margin: { left: 40, right: 40 },
     theme: "grid",
@@ -222,19 +231,26 @@ async function exportToPDF(units, grand, company) {
     headStyles: { fillColor: false, textColor: 20, fontStyle: "normal", lineWidth: 0.5 },
     alternateRowStyles: { fillColor: false },
     columnStyles: {
-      2: { halign: "right" },
+      0: { halign: "center", cellWidth: 36 },
       3: { halign: "right" },
       4: { halign: "right" },
       5: { halign: "right" },
+      6: { halign: "right" },
     },
     didParseCell: (data) => {
       if (data.section !== "body") return;
       const kind = rows[data.row.index]?.kind;
       if (kind === "po") {
+        // Plain caption just above the table: no fill, no cell outline.
         data.cell.styles.fontStyle = "bold";
-        data.cell.styles.fillColor = [235, 235, 235];
+        data.cell.styles.fillColor = false;
+        data.cell.styles.lineWidth = 0;
+        data.cell.styles.halign = "left";
+      } else if (kind === "head") {
+        data.cell.styles.fontStyle = "bold";
       } else if (kind === "total" || kind === "unitTotal" || kind === "grand") {
         data.cell.styles.fontStyle = "bold";
+        if (data.column.index === 0) data.cell.styles.halign = "left";
       }
     },
   });
