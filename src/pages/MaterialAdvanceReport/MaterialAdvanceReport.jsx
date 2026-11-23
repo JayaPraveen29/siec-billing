@@ -8,7 +8,7 @@ import {
   sumMaterialAdvanceRows,
 } from "../../utils/materialAdvanceReport";
 import { computePOLedger, isMatAdvNA } from "../../utils/ledger";
-import { fmtNum, fmtINR, fmtToday, drawPdfCompany } from "../../utils/format";
+import { fmtToday, drawPdfCompany } from "../../utils/format";
 import * as XLSX from "xlsx";
 import GroupSelect, { WorkTypeSelect } from "../../components/GroupSelect";
 import { matchesGroup, matchesWorkType } from "../../utils/groups";
@@ -17,6 +17,18 @@ import TitleBlock from "../../components/TitleBlock";
 import Loading from "../../components/Loading";
 import "./MaterialAdvanceReport.css";
 
+
+// Whole rupees only - no decimals anywhere on this report.
+const fmt0 = (n) => {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "-";
+  return Math.round(v).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+};
+const fmtINR0 = (n) => {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "-";
+  return (Math.round(v) < 0 ? "-" : "") + "\u20B9" + fmt0(Math.abs(v));
+};
 
 const exportHeaders = (advLabel) => ["S.No.", "PO", advLabel, "Adjusted", "Bala. Mat. Adv."];
 
@@ -28,7 +40,7 @@ function stamp() {
 }
 
 // POs created with "NA" material advance show NA instead of numbers.
-const matCell = (r, value) => (r.matAdvNA ? "NA" : fmtNum(value, 0));
+const matCell = (r, value) => (r.matAdvNA ? "NA" : fmt0(value));
 
 // Unit order on the report: SIEC first, then ST, then anything else.
 const UNIT_ORDER = ["SIEC", "ST"];
@@ -55,6 +67,7 @@ function buildDisplayItems(rows) {
   keys.forEach((k) => {
     items.push({ type: "unit", name: k });
     buckets.get(k).forEach((r, i) => items.push({ type: "row", sn: i + 1, row: r }));
+    items.push({ type: "subtotal", name: k, totals: sumMaterialAdvanceRows(buckets.get(k)) });
   });
   return items;
 }
@@ -69,13 +82,13 @@ function exportRow(sn, r) {
   ];
 }
 
-function exportTotal(t) {
+function exportTotal(t, label = "Grand Total") {
   return [
     "",
-    "Grand Total",
-    fmtNum(t.recovered, 0),
-    fmtNum(t.balanceAdvance, 0),
-    fmtNum(balaMatAdv(t), 0),
+    label,
+    fmt0(t.recovered),
+    fmt0(t.balanceAdvance),
+    fmt0(balaMatAdv(t)),
   ];
 }
 
@@ -107,6 +120,8 @@ async function exportToExcel(totals, items, rowCount, advLabel) {
     if (it.type === "unit") {
       unitRows.push(aoa.length);
       aoa.push([it.name, "", "", "", ""]);
+    } else if (it.type === "subtotal") {
+      aoa.push(exportTotal(it.totals, `${it.name} Total`));
     } else {
       aoa.push(exportRow(it.sn, it.row));
     }
@@ -142,11 +157,16 @@ async function exportToPDF(totals, items, rowCount, advLabel, company) {
   doc.setFontSize(9);
   doc.text(`POs: ${rowCount}`, 40, 58);
 
-  const body = items.map((it) =>
-    it.type === "unit"
-      ? [{ content: it.name, colSpan: 5, styles: { fontStyle: "bold", halign: "left" } }]
-      : exportRow(it.sn, it.row).map((v) => String(v))
-  );
+  const body = items.map((it) => {
+    if (it.type === "unit")
+      return [{ content: it.name, colSpan: 5, styles: { fontStyle: "bold", halign: "left" } }];
+    if (it.type === "subtotal")
+      return exportTotal(it.totals, `${it.name} Total`).map((v, i) => ({
+        content: String(v),
+        styles: { fontStyle: "bold", halign: i >= 2 ? "right" : "left" },
+      }));
+    return exportRow(it.sn, it.row).map((v) => String(v));
+  });
 
   autoTable(doc, {
     head: [exportHeaders(advLabel)],
@@ -411,6 +431,14 @@ export default function MaterialAdvanceReport() {
                       {it.name}
                     </td>
                   </tr>
+                ) : it.type === "subtotal" ? (
+                  <tr key={`sub-${it.name}`} className="matadv-unit-row">
+                    <td></td>
+                    <td style={{ fontWeight: 700 }}>{it.name} Total</td>
+                    <td className="text-right tabular" style={{ fontWeight: 700 }}>{fmtINR0(it.totals.recovered)}</td>
+                    <td className="text-right tabular" style={{ fontWeight: 700 }}>{fmtINR0(it.totals.balanceAdvance)}</td>
+                    <td className="text-right tabular" style={{ fontWeight: 700 }}>{fmtINR0(balaMatAdv(it.totals))}</td>
+                  </tr>
                 ) : (
                   (() => {
                     const r = it.row;
@@ -444,9 +472,9 @@ export default function MaterialAdvanceReport() {
               <tr>
                 <td></td>
                 <td>Grand Total</td>
-                <td className="text-right tabular">{fmtINR(totals.recovered)}</td>
-                <td className="text-right tabular">{fmtINR(totals.balanceAdvance)}</td>
-                <td className="text-right tabular">{fmtINR(balaMatAdv(totals))}</td>
+                <td className="text-right tabular">{fmtINR0(totals.recovered)}</td>
+                <td className="text-right tabular">{fmtINR0(totals.balanceAdvance)}</td>
+                <td className="text-right tabular">{fmtINR0(balaMatAdv(totals))}</td>
               </tr>
             </tfoot>
           </table>
