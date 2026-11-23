@@ -175,13 +175,13 @@ function exportToExcel(units, grand) {
   const rows = buildExportRows(units, grand);
   const ws = XLSX.utils.aoa_to_sheet(rows.map((r) => r.cells));
   ws["!cols"] = [
-    { wch: 7 },
-    { wch: 18 },
-    { wch: 14 },
-    { wch: 13 },
-    { wch: 12 },
-    { wch: 12 },
+    { wch: 6 },
+    { wch: 11 },
     { wch: 10 },
+    { wch: 11 },
+    { wch: 10 },
+    { wch: 11 },
+    { wch: 8 },
   ];
   // Merge the PO heading across the whole row and the Total labels across
   // their first three columns.
@@ -218,10 +218,11 @@ async function exportToPDF(units, grand, company) {
     ),
     startY: 72,
     margin: { left: 40, right: 40 },
+    tableWidth: "wrap", // columns shrink to their content - no extra gaps
     theme: "grid",
     styles: {
       fontSize: 8,
-      cellPadding: 3,
+      cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
       valign: "middle",
       lineColor: [0, 0, 0],
       lineWidth: 0.5,
@@ -231,7 +232,7 @@ async function exportToPDF(units, grand, company) {
     headStyles: { fillColor: false, textColor: 20, fontStyle: "normal", lineWidth: 0.5 },
     alternateRowStyles: { fillColor: false },
     columnStyles: {
-      0: { halign: "center", cellWidth: 36 },
+      0: { halign: "center" },
       3: { halign: "right" },
       4: { halign: "right" },
       5: { halign: "right" },
