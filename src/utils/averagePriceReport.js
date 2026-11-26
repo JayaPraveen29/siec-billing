@@ -11,7 +11,7 @@
 
 import { PO_GROUPS, WORK_TYPES } from "./groups";
 import { inFinancialYear } from "./financialYear";
-import { CT_TUB_WEIGHT_KG, ctItemNumbers } from "./ledger";
+import { CT_TUB_WEIGHT_KG, ctItemNumbers, computePOLedger } from "./ledger";
 
 function num(v) {
   const n = Number(v);
@@ -60,11 +60,20 @@ export function computeAveragePriceReport(poSheets, { fy = "all" } = {}) {
       cells,
     };
 
-    (items || []).forEach((item) => {
-      const ordered = isCT ? ctItemNumbers(item) * CT_TUB_WEIGHT_KG : num(item.weightKg);
-      row.weightMT += ordered / 1000;
-      row.basic += ordered * unitRate; // ordered kg x rate per kg (CT: unit rate / 586)
-    });
+    if (po.workType === "SCRAP") {
+      // SCRAP POs carry no single PO rate (the rate is set bill by bill), so the
+      // ordered weight x PO rate gives 0. Use what was actually billed:
+      //   average rate = total basic value / total weight  (both from the bills)
+      const { totals } = computePOLedger(po, items || [], fy === "all" ? invoices || [] : fyInvoices);
+      row.weightMT = num(totals.qty) / 1000;
+      row.basic = num(totals.basic);
+    } else {
+      (items || []).forEach((item) => {
+        const ordered = isCT ? ctItemNumbers(item) * CT_TUB_WEIGHT_KG : num(item.weightKg);
+        row.weightMT += ordered / 1000;
+        row.basic += ordered * unitRate; // ordered kg x rate per kg (CT: unit rate / 586)
+      });
+    }
 
     // Ordered MT / Basic go under the PO's company (SIEC / ST) and work type
     // (STRL / CT / SCRAP), and always into the overall Total block.

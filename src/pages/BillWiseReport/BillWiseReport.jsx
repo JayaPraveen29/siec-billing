@@ -280,7 +280,7 @@ export default function BillWiseReport() {
           </label>
         </div>
         <GroupSelect value={group} onChange={setGroup} />
-<WorkTypeSelect value={workType} onChange={setWorkType} />
+        <WorkTypeSelect value={workType} onChange={setWorkType} />
         <select
           value={paymentStatus}
           onChange={(e) => setPaymentStatus(e.target.value)}
