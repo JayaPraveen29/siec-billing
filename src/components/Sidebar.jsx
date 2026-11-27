@@ -69,28 +69,33 @@ export default function Sidebar() {
       </div>
 
       <nav className="sidebar-nav">
-        <NavLink
-          to="/"
-          end
-          className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`}
+        <div
+          className={`sidebar-primary${reportsOpen ? " collapsed" : ""}`}
+          aria-hidden={reportsOpen}
         >
-          <LayoutGrid size={17} />
-          PO Sheets
-        </NavLink>
-        <NavLink
-          to="/po/new"
-          className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`}
-        >
-          <FilePlus2 size={17} />
-          PO Creation
-        </NavLink>
-        <NavLink
-          to="/material-advance/entry"
-          className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`}
-        >
-          <Banknote size={17} />
-          Material Advance Entry
-        </NavLink>
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`}
+          >
+            <LayoutGrid size={17} />
+            PO Sheets
+          </NavLink>
+          <NavLink
+            to="/po/new"
+            className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`}
+          >
+            <FilePlus2 size={17} />
+            PO Creation
+          </NavLink>
+          <NavLink
+            to="/material-advance/entry"
+            className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`}
+          >
+            <Banknote size={17} />
+            Material Advance Entry
+          </NavLink>
+        </div>
         <button
           type="button"
           className={`sidebar-link sidebar-link-toggle${

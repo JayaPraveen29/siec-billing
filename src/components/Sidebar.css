@@ -98,6 +98,38 @@
   transform: rotate(180deg);
 }
 
+/* PO Sheets / PO Creation / Material Advance Entry. When Reports is open this
+   group slides up and out of view so Reports (and its submenu) sit at the top;
+   clicking Reports again brings the group back. */
+.sidebar-primary {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  overflow: hidden;
+  max-height: 300px;
+  opacity: 1;
+  transition: max-height 0.25s ease, opacity 0.2s ease, visibility 0s linear 0s;
+}
+
+.sidebar-primary.collapsed {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden; /* also removes the hidden links from keyboard tab order */
+  transition: max-height 0.25s ease, opacity 0.2s ease, visibility 0s linear 0.25s;
+}
+
+@media (max-width: 767px) {
+  .sidebar-primary {
+    max-height: none;
+    max-width: 100%;
+  }
+  .sidebar-primary.collapsed {
+    display: none;
+  }
+}
+
 .sidebar-submenu {
   display: flex;
   flex-direction: row;
@@ -136,6 +168,11 @@
 
   .sidebar-link-toggle {
     width: 100%;
+  }
+
+  .sidebar-primary {
+    flex-direction: column;
+    flex-wrap: nowrap;
   }
 
   .sidebar-submenu {
